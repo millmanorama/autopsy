@@ -152,3 +152,4 @@ WebHostingHub Glyphs
 
 Splashy Icons (free as in free) 
 - Web page: http://splashyfish.com/icons/
+Codacy Badge
