@@ -23,6 +23,7 @@ import org.openide.nodes.Children.Keys;
 import org.openide.nodes.Node;
 import org.openide.util.NbBundle;
 import org.sleuthkit.autopsy.datamodel.FileTypes.FileTypesNode;
+import org.sleuthkit.autopsy.datamodel.FileTypesByExtension.FileTypesByExtNode;
 import org.sleuthkit.autopsy.datamodel.accounts.Accounts;
 import org.sleuthkit.autopsy.datamodel.accounts.Accounts.AccountsRootNode;
 import org.sleuthkit.datamodel.Content;
@@ -138,7 +139,7 @@ abstract class AbstractContentChildren<T> extends Keys<T> {
 
         @Override
         public AbstractNode visit(FileTypesByExtension sf) {
-            return new org.sleuthkit.autopsy.datamodel.FileTypesByExtension.FileTypesByExtNode(sf.getSleuthkitCase(), null);
+            return new FileTypesByExtNode(sf.getSleuthkitCase(), null);
         }
 
         @Override
