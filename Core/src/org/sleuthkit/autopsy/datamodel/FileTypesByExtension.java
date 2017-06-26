@@ -1,7 +1,7 @@
 /*
  * Autopsy Forensic Browser
  *
- * Copyright 2011 Basis Technology Corp.
+ * Copyright 2011-2017 Basis Technology Corp.
  * Contact: carrier <at> sleuthkit <dot> org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.ChildFactory;
 import org.openide.nodes.Children;
@@ -36,7 +37,6 @@ import org.sleuthkit.autopsy.casemodule.Case;
 import org.sleuthkit.autopsy.core.UserPreferences;
 import org.sleuthkit.autopsy.coreutils.Logger;
 import org.sleuthkit.autopsy.ingest.IngestManager;
-import org.sleuthkit.datamodel.AbstractFile;
 import org.sleuthkit.datamodel.Content;
 import org.sleuthkit.datamodel.ContentVisitor;
 import org.sleuthkit.datamodel.DerivedFile;
@@ -51,7 +51,7 @@ import org.sleuthkit.datamodel.TskData;
 /**
  * Filters database results by file extension.
  */
- public final class FileTypesByExtension implements AutopsyVisitableItem {
+public final class FileTypesByExtension implements AutopsyVisitableItem {
 
     private final SleuthkitCase skCase;
 
@@ -99,7 +99,8 @@ import org.sleuthkit.datamodel.TskData;
                  */
                 try {
                     Case.getCurrentCase();
-                    update();
+                    setChanged();
+                    notifyObservers();
                 } catch (IllegalStateException notUsed) {
                     /**
                      * Case is closed, do nothing.
@@ -113,10 +114,6 @@ import org.sleuthkit.datamodel.TskData;
             }
         };
 
-        private void update() {
-            setChanged();
-            notifyObservers();
-        }
     }
 
     /**
@@ -134,9 +131,7 @@ import org.sleuthkit.datamodel.TskData;
          *               something to provide a sub-node.
          */
         FileTypesByExtNode(SleuthkitCase skCase, FileTypesByExtension.RootFilter filter) {
-            super(Children.create(new FileTypesByExtNodeChildren(skCase, filter, null), true), Lookups.singleton(filter == null ? FNAME : filter.getName()));
-            this.filter = filter;
-            init();
+            this(skCase, filter, null);
         }
 
         /**
@@ -149,16 +144,10 @@ import org.sleuthkit.datamodel.TskData;
         private FileTypesByExtNode(SleuthkitCase skCase, FileTypesByExtension.RootFilter filter, Observable o) {
             super(Children.create(new FileTypesByExtNodeChildren(skCase, filter, o), true), Lookups.singleton(filter == null ? FNAME : filter.getName()));
             this.filter = filter;
-            init();
-        }
-
-        private void init() {
-            // root node of tree
-            if (filter == null) {
+            if (filter == null) { // root node of tree
                 super.setName(FNAME);
                 super.setDisplayName(FNAME);
-            } // sub-node in file tree (i.e. documents, exec, etc.)
-            else {
+            } else { // sub-node in file tree (i.e. documents, exec, etc.)
                 super.setName(filter.getName());
                 super.setDisplayName(filter.getDisplayName());
             }
@@ -183,7 +172,11 @@ import org.sleuthkit.datamodel.TskData;
                 ss = Sheet.createPropertiesSet();
                 s.put(ss);
             }
-            ss.put(new NodeProperty<>(NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.name.name"), NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.name.displayName"), NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.name.desc"), getName()));
+            ss.put(new NodeProperty<>(NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.name.name"),
+                    NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.name.displayName"),
+                    NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.name.desc"),
+                    getName()));
+
             return s;
         }
 
@@ -193,10 +186,8 @@ import org.sleuthkit.datamodel.TskData;
              * Because Documents and Executable are further expandable, their
              * column order settings should be stored separately.
              */
-            if (filter == null) {
-                return getClass().getName();
-            }
-            if (filter.equals(FileTypesByExtension.RootFilter.TSK_DOCUMENT_FILTER) || filter.equals(FileTypesByExtension.RootFilter.TSK_EXECUTABLE_FILTER)) {
+            if (FileTypesByExtension.RootFilter.TSK_DOCUMENT_FILTER.equals(filter)
+                    || FileTypesByExtension.RootFilter.TSK_EXECUTABLE_FILTER.equals(filter)) {
                 return getClass().getName() + filter.getName();
             }
             return getClass().getName();
@@ -219,6 +210,7 @@ import org.sleuthkit.datamodel.TskData;
                 super();
                 this.skCase = skCase;
                 this.filter = filter;
+
                 if (o == null) {
                     this.notifier = new FileTypesByExtObservable();
                 } else {
@@ -259,10 +251,10 @@ import org.sleuthkit.datamodel.TskData;
      * Node for a specific file type / extension. Children of it will be the
      * files of that type.
      */
-    static class FileExtensionNode extends DisplayableItemNode {
+    static class FileExtensionNode extends DisplayableItemNode implements Observer {
 
-        FileTypesByExtension.SearchFilterInterface filter;
-        SleuthkitCase skCase;
+        private final FileTypesByExtension.SearchFilterInterface filter;
+        private final SleuthkitCase skCase;
 
         /**
          *
@@ -275,23 +267,15 @@ import org.sleuthkit.datamodel.TskData;
             super(Children.create(new FileExtensionNodeChildren(filter, skCase, o), true), Lookups.singleton(filter.getDisplayName()));
             this.filter = filter;
             this.skCase = skCase;
-            init();
-            o.addObserver(new ByExtNodeObserver());
-        }
-
-        private void init() {
             super.setName(filter.getName());
             updateDisplayName();
             this.setIconBaseWithExtension("org/sleuthkit/autopsy/images/file-filter-icon.png"); //NON-NLS
+            o.addObserver(this);
         }
 
-        // update the display name when new events are fired
-        private class ByExtNodeObserver implements Observer {
-
-            @Override
-            public void update(Observable o, Object arg) {
-                updateDisplayName();
-            }
+        @Override
+        public void update(Observable o, Object arg) {
+            updateDisplayName();
         }
 
         private void updateDisplayName() {
@@ -312,13 +296,16 @@ import org.sleuthkit.datamodel.TskData;
                 ss = Sheet.createPropertiesSet();
                 s.put(ss);
             }
-            ss.put(new NodeProperty<>(NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.filterType.name"), NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.filterType.displayName"), NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.filterType.desc"), filter.getDisplayName()));
-            String extensions = "";
-            for (String ext : filter.getFilter()) {
-                extensions += "'" + ext + "', ";
-            }
-            extensions = extensions.substring(0, extensions.lastIndexOf(','));
-            ss.put(new NodeProperty<>(NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.fileExt.name"), NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.fileExt.displayName"), NbBundle.getMessage(this.getClass(), "FileTypesByExtNode.createSheet.fileExt.desc"), extensions));
+            ss.put(new NodeProperty<>(NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.filterType.name"),
+                    NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.filterType.displayName"),
+                    NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.filterType.desc"),
+                    filter.getDisplayName()));
+
+            ss.put(new NodeProperty<>(NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.fileExt.name"),
+                    NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.fileExt.displayName"),
+                    NbBundle.getMessage(FileTypesByExtension.class, "FileTypesByExtNode.createSheet.fileExt.desc"),
+                    String.join(",", filter.getFilter())));
+
             return s;
         }
 
@@ -327,13 +314,13 @@ import org.sleuthkit.datamodel.TskData;
             return true;
         }
 
-        /**
-         * Consider allowing different configurations for Images, Videos, etc
-         * (in which case we'd return getClass().getName() + filter.getName()
-         * for all filters).
-         */
         @Override
         public String getItemType() {
+            /*
+             * Consider allowing different configurations for Images, Videos,
+             * etc (in which case we'd return getClass().getName() +
+             * filter.getName() for all filters).
+             */
             return DisplayableItemNode.FILE_PARENT_NODE_KEY;
         }
 
@@ -341,7 +328,7 @@ import org.sleuthkit.datamodel.TskData;
          * Child node factory for a specific file type - does the database
          * query.
          */
-        private static class FileExtensionNodeChildren extends ChildFactory.Detachable<Content> {
+        private static class FileExtensionNodeChildren extends ChildFactory.Detachable<Content> implements Observer {
 
             private final SleuthkitCase skCase;
             private final FileTypesByExtension.SearchFilterInterface filter;
@@ -365,33 +352,31 @@ import org.sleuthkit.datamodel.TskData;
             @Override
             protected void addNotify() {
                 if (notifier != null) {
-                    notifier.addObserver(observer);
+                    notifier.addObserver(this);
                 }
             }
 
             @Override
             protected void removeNotify() {
                 if (notifier != null) {
-                    notifier.deleteObserver(observer);
+                    notifier.deleteObserver(this);
                 }
             }
-            private final Observer observer = new FileTypeChildFactoryObserver();
 
-            // Cause refresh of children if there are changes
-            private class FileTypeChildFactoryObserver implements Observer {
-
-                @Override
-                public void update(Observable o, Object arg) {
-                    refresh(true);
-                }
+            @Override
+            public void update(Observable o, Object arg) {
+                refresh(true);
             }
 
             /**
              * Get children count without actually loading all nodes
              *
-             * @return
+             * @param sleuthkitCase the TSKcase object to query against
+             * @param filter        The filter to use in the query.
+             *
+             * @return The number of item that match the filter.
              */
-            private static long calculateItems(SleuthkitCase sleuthkitCase, FileTypesByExtension.SearchFilterInterface filter) {
+            private static long calculateItems(SleuthkitCase sleuthkitCase, SearchFilterInterface filter) {
                 try {
                     return sleuthkitCase.countFilesWhere(createQuery(filter));
                 } catch (TskCoreException ex) {
@@ -403,8 +388,7 @@ import org.sleuthkit.datamodel.TskData;
             @Override
             protected boolean createKeys(List<Content> list) {
                 try {
-                    List<AbstractFile> files = skCase.findAllFilesWhere(createQuery(filter));
-                    list.addAll(files);
+                    list.addAll(skCase.findAllFilesWhere(createQuery(filter)));
                 } catch (TskCoreException ex) {
                     LOGGER.log(Level.SEVERE, "Couldn't get search results", ex); //NON-NLS
                 }
@@ -412,17 +396,14 @@ import org.sleuthkit.datamodel.TskData;
             }
 
             private static String createQuery(FileTypesByExtension.SearchFilterInterface filter) {
-                StringBuilder query = new StringBuilder();
-                query.append("(dir_type = ").append(TskData.TSK_FS_NAME_TYPE_ENUM.REG.getValue()).append(")"); //NON-NLS
-                if (UserPreferences.hideKnownFilesInViewsTree()) {
-                    query.append(" AND (known IS NULL OR known != ").append(TskData.FileKnown.KNOWN.getFileKnownValue()).append(")"); //NON-NLS
-                }
-                query.append(" AND (NULL"); //NON-NLS
-                for (String s : filter.getFilter()) {
-                    query.append(" OR LOWER(name) LIKE LOWER('%").append(s).append("')"); //NON-NLS
-                }
-                query.append(')');
-                return query.toString();
+                final boolean hideKnownFilesInViewsTree = UserPreferences.hideKnownFilesInViewsTree();
+                return "(dir_type = " + TskData.TSK_FS_NAME_TYPE_ENUM.REG.getValue() + ")"
+                        + (hideKnownFilesInViewsTree ? " AND (known IS NULL OR known != " + TskData.FileKnown.KNOWN.getFileKnownValue() + ")" : "")
+                        + " AND (NULL OR "
+                        + filter.getFilter().stream()
+                                .map(f -> "LOWER(name) LIKE LOWER('%" + f + "')")
+                                .collect(Collectors.joining(" OR "))
+                        + ')';
             }
 
             @Override
@@ -463,7 +444,7 @@ import org.sleuthkit.datamodel.TskData;
     }
 
     // root node filters
-    public static enum RootFilter implements AutopsyVisitableItem, SearchFilterInterface {
+    static enum RootFilter implements AutopsyVisitableItem, SearchFilterInterface {
 
         TSK_IMAGE_FILTER(0, "TSK_IMAGE_FILTER", //NON-NLS
                 NbBundle.getMessage(FileTypesByExtension.class, "FileTypeExtensionFilters.tskImgFilter.text"),
@@ -523,7 +504,7 @@ import org.sleuthkit.datamodel.TskData;
     }
 
     // document sub-node filters
-    public static enum DocumentFilter implements AutopsyVisitableItem, SearchFilterInterface {
+    static enum DocumentFilter implements AutopsyVisitableItem, SearchFilterInterface {
 
         AUT_DOC_HTML(0, "AUT_DOC_HTML", //NON-NLS
                 NbBundle.getMessage(FileTypesByExtension.class, "FileTypeExtensionFilters.autDocHtmlFilter.text"),
@@ -580,7 +561,7 @@ import org.sleuthkit.datamodel.TskData;
     }
 
     // executable sub-node filters
-    public static enum ExecutableFilter implements AutopsyVisitableItem, SearchFilterInterface {
+    static enum ExecutableFilter implements AutopsyVisitableItem, SearchFilterInterface {
 
         ExecutableFilter_EXE(0, "ExecutableFilter_EXE", ".exe", Arrays.asList(".exe")), //NON-NLS
         ExecutableFilter_DLL(1, "ExecutableFilter_DLL", ".dll", Arrays.asList(".dll")), //NON-NLS
@@ -626,7 +607,7 @@ import org.sleuthkit.datamodel.TskData;
         }
     }
 
-    interface SearchFilterInterface {
+    private interface SearchFilterInterface {
 
         public String getName();
 
