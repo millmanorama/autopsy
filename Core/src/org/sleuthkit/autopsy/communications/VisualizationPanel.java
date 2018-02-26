@@ -34,33 +34,36 @@ import com.mxgraph.util.mxEventObject;
 import com.mxgraph.util.mxEventSource;
 import com.mxgraph.util.mxPoint;
 import com.mxgraph.util.mxRectangle;
+import com.mxgraph.util.mxUndoManager;
+import com.mxgraph.util.mxUndoableEdit;
 import com.mxgraph.view.mxGraph;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Frame;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.beans.PropertyVetoException;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import static java.util.Collections.singleton;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JProgressBar;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
@@ -78,7 +81,8 @@ import org.openide.util.lookup.ProxyLookup;
 import org.sleuthkit.autopsy.casemodule.Case;
 import static org.sleuthkit.autopsy.casemodule.Case.Events.CURRENT_CASE;
 import org.sleuthkit.autopsy.coreutils.Logger;
-import org.sleuthkit.autopsy.progress.ProgressIndicator;
+import org.sleuthkit.autopsy.coreutils.ThreadConfined;
+import org.sleuthkit.autopsy.progress.ModalDialogProgressIndicator;
 import org.sleuthkit.datamodel.AccountDeviceInstance;
 import org.sleuthkit.datamodel.CommunicationsFilter;
 import org.sleuthkit.datamodel.CommunicationsManager;
@@ -87,13 +91,15 @@ import org.sleuthkit.datamodel.TskCoreException;
 
 /**
  * A panel that goes in the Visualize tab of the Communications Visualization
- * Tool. Hosts an JGraphX mxGraphComponent that host the communications network
- * visualization and a MessageBrowser for viewing details of communications.
+ * Tool. Hosts an JGraphX mxGraphComponent that implements the communications
+ * network visualization and a MessageBrowser for viewing details of
+ * communications.
  *
  * The Lookup provided by getLookup will be proxied by the lookup of the
  * CVTTopComponent when this tab is active allowing for context sensitive
  * actions to work correctly.
  */
+@NbBundle.Messages("VisualizationPanel.cancelButton.text=Cancel")
 final public class VisualizationPanel extends JPanel implements Lookup.Provider {
 
     private static final long serialVersionUID = 1L;
@@ -110,27 +116,39 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     static final private ImageIcon lockIcon =
             new ImageIcon(VisualizationPanel.class.getResource(BASE_IMAGE_PATH + "/lock_large_locked.png"));
 
+    private static final String CANCEL = Bundle.VisualizationPanel_cancelButton_text();
+
     private final ExplorerManager vizEM = new ExplorerManager();
     private final ExplorerManager gacEM = new ExplorerManager();
     private final ProxyLookup proxyLookup = new ProxyLookup(
             ExplorerUtils.createLookup(gacEM, getActionMap()),
             ExplorerUtils.createLookup(vizEM, getActionMap()));
 
-    private final mxGraphComponent graphComponent;
-    private final mxGraphImpl graph;
+    private Frame windowAncestor;
 
     private CommunicationsManager commsManager;
     private CommunicationsFilter currentFilter;
+
+    private final mxGraphComponent graphComponent;
+    private final CommunicationsGraph graph;
+
+    protected mxUndoManager undoManager = new mxUndoManager();
     private final mxRubberband rubberband;
     private final mxFastOrganicLayout fastOrganicLayout;
     private final mxCircleLayout circleLayout;
     private final mxOrganicLayout organicLayout;
     private final mxHierarchicalLayout hierarchicalLayout;
+
+    @ThreadConfined(type = ThreadConfined.ThreadType.AWT)
     private SwingWorker<?, ?> worker;
+    private final PinnedAccountModel pinnedAccountModel;
+    private final LockedVertexModel lockedVertexModel;
 
     public VisualizationPanel() {
         initComponents();
-        graph = new mxGraphImpl();
+        graph = new CommunicationsGraph();
+        pinnedAccountModel = graph.getPinnedAccountModel();
+        lockedVertexModel = graph.getLockedVertexModel();
 
         fastOrganicLayout = new mxFastOrganicLayoutImpl(graph);
         circleLayout = new mxCircleLayoutImpl(graph);
@@ -148,7 +166,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         graphComponent.setToolTips(true);
         graphComponent.setBackground(Color.WHITE);
         borderLayoutPanel.add(graphComponent, BorderLayout.CENTER);
-        progressBar.setVisible(false);
 
         //install rubber band selection handler
         rubberband = new mxRubberband(graphComponent);
@@ -176,29 +193,27 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
             public void mouseClicked(MouseEvent e) {
                 super.mouseClicked(e);
                 if (SwingUtilities.isRightMouseButton(e)) {
-                    mxCell cellAt = (mxCell) graphComponent.getCellAt(e.getX(), e.getY());
+                    final mxCell cellAt = (mxCell) graphComponent.getCellAt(e.getX(), e.getY());
                     if (cellAt != null && cellAt.isVertex()) {
-                        JPopupMenu jPopupMenu = new JPopupMenu();
-                        AccountDeviceInstanceKey adiKey = (AccountDeviceInstanceKey) cellAt.getValue();
+                        final JPopupMenu jPopupMenu = new JPopupMenu();
+                        final AccountDeviceInstanceKey adiKey = (AccountDeviceInstanceKey) cellAt.getValue();
 
-                        if (graph.isVertexLocked(cellAt)) {
+                        if (lockedVertexModel.isVertexLocked(cellAt)) {
                             jPopupMenu.add(new JMenuItem(new AbstractAction("UnLock " + cellAt.getId(), unlockIcon) {
                                 @Override
                                 public void actionPerformed(ActionEvent e) {
-                                    graph.unlockVertex(cellAt);
+                                    lockedVertexModel.unlockVertex(cellAt);
                                 }
                             }));
-
                         } else {
                             jPopupMenu.add(new JMenuItem(new AbstractAction("Lock " + cellAt.getId(), lockIcon) {
                                 @Override
                                 public void actionPerformed(ActionEvent e) {
-                                    graph.lockVertex(cellAt);
+                                    lockedVertexModel.lockVertex(cellAt);
                                 }
                             }));
-
                         }
-                        if (graph.isAccountPinned(adiKey)) {
+                        if (pinnedAccountModel.isAccountPinned(adiKey)) {
                             jPopupMenu.add(new JMenuItem(new AbstractAction("Unpin " + cellAt.getId(), unpinIcon) {
                                 @Override
                                 public void actionPerformed(ActionEvent e) {
@@ -206,7 +221,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
                                 }
                             }));
                         } else {
-
                             jPopupMenu.add(new JMenuItem(new AbstractAction("Pin " + cellAt.getId(), addPinIcon) {
                                 @Override
                                 public void actionPerformed(ActionEvent e) {
@@ -220,7 +234,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
                                 }
                             }));
                         }
-
                         jPopupMenu.show(graphComponent.getGraphControl(), e.getX(), e.getY());
                     }
                 }
@@ -231,9 +244,15 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
 
         //feed selection to explorermanager
         graph.getSelectionModel().addListener(null, new SelectionListener());
+        final mxEventSource.mxIEventListener undoListener = (Object sender, mxEventObject evt) ->
+                undoManager.undoableEditHappened((mxUndoableEdit) evt.getProperty("edit"));
+
+        graph.getModel().addListener(mxEvent.UNDO, undoListener);
+        graph.getView().addListener(mxEvent.UNDO, undoListener);
     }
 
     @Override
+
     public Lookup getLookup() {
         return proxyLookup;
     }
@@ -241,35 +260,24 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     @Subscribe
     void handleUnPinEvent(CVTEvents.UnpinAccountsEvent pinEvent) {
         graph.getModel().beginUpdate();
-        try {
-            graph.unpinAccount(pinEvent.getAccountDeviceInstances());
-            graph.clear();
-            rebuildGraph();
-        } catch (TskCoreException ex) {
-            logger.log(Level.SEVERE, "Error pinning accounts", ex);
-        } finally {
-            // Updates the display
-            graph.getModel().endUpdate();
-        }
+        pinnedAccountModel.unpinAccount(pinEvent.getAccountDeviceInstances());
+        graph.clear();
+        rebuildGraph();
+        // Updates the display
+        graph.getModel().endUpdate();
 
     }
 
     @Subscribe
     void handlePinEvent(CVTEvents.PinAccountsEvent pinEvent) {
         graph.getModel().beginUpdate();
-        try {
-            if (pinEvent.isReplace()) {
-                graph.resetGraph();
-            }
-
-            graph.pinAccount(pinEvent.getAccountDeviceInstances());
-            rebuildGraph();
-        } catch (TskCoreException ex) {
-            logger.log(Level.SEVERE, "Error pinning accounts", ex);
-        } finally {
-            // Updates the display
-            graph.getModel().endUpdate();
+        if (pinEvent.isReplace()) {
+            graph.resetGraph();
         }
+        pinnedAccountModel.pinAccount(pinEvent.getAccountDeviceInstances());
+        rebuildGraph();
+        // Updates the display
+        graph.getModel().endUpdate();
 
     }
 
@@ -277,43 +285,47 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     void handleFilterEvent(CVTEvents.FilterChangeEvent filterChangeEvent) {
 
         graph.getModel().beginUpdate();
-        try {
-            graph.clear();
-            currentFilter = filterChangeEvent.getNewFilter();
-            rebuildGraph();
-        } catch (TskCoreException ex) {
-            logger.log(Level.SEVERE, "Error filtering accounts", ex);
-        } finally {
-            // Updates the display
-            graph.getModel().endUpdate();
-        }
+        graph.clear();
+        currentFilter = filterChangeEvent.getNewFilter();
+        rebuildGraph();
+        // Updates the display
+        graph.getModel().endUpdate();
 
     }
 
-    private void rebuildGraph() throws TskCoreException {
-        if (graph.isEmpty()) {
+    @ThreadConfined(type = ThreadConfined.ThreadType.AWT)
+    private void rebuildGraph() {
+        if (pinnedAccountModel.isEmpty()) {
             borderLayoutPanel.remove(graphComponent);
             borderLayoutPanel.add(placeHolderPanel, BorderLayout.CENTER);
+            repaint();
         } else {
             borderLayoutPanel.remove(placeHolderPanel);
             borderLayoutPanel.add(graphComponent, BorderLayout.CENTER);
             if (worker != null) {
                 worker.cancel(true);
             }
-            worker = graph.rebuild(new ProgressIndicatorImpl(), commsManager, currentFilter);
 
-            worker.addPropertyChangeListener(new PropertyChangeListener() {
-                @Override
-                public void propertyChange(PropertyChangeEvent evt) {
-                    if (worker.isDone()) {
-                        if (graph.getModel().getChildCount(graph.getDefaultParent()) < 64) {
-                            applyOrganicLayout(10);
-                        } else {
-                            statusLabel.setText("Too many cells, layout aborted.");
-                        }
+            CancelationListener cancelationListener = new CancelationListener();
+            ModalDialogProgressIndicator progress = new ModalDialogProgressIndicator(windowAncestor, "Loading Visualization", new String[]{CANCEL}, CANCEL, cancelationListener);
+            worker = graph.rebuild(progress, commsManager, currentFilter);
+            cancelationListener.configure(worker, progress);
+            worker.addPropertyChangeListener((final PropertyChangeEvent evt) -> {
+                if (worker.isDone()) {
+                    if (worker.isCancelled()) {
+                        graph.resetGraph();
+                        rebuildGraph();
+                    } else if (graph.getModel().getChildCount(graph.getDefaultParent()) < 64) {
+                        applyOrganicLayout(10);
+                    } else {
+                        JOptionPane.showMessageDialog(VisualizationPanel.this,
+                                "Too many accounts, layout aborted.",
+                                "Autopsy",
+                                JOptionPane.WARNING_MESSAGE);
                     }
                 }
             });
+
             worker.execute();
 
         }
@@ -322,10 +334,10 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     @Override
     public void addNotify() {
         super.addNotify();
-//        IngestManager.getInstance().addIngestModuleEventListener(ingestListener);
+        windowAncestor = (Frame) SwingUtilities.getAncestorOfClass(Frame.class, this);
+
         try {
             commsManager = Case.getCurrentCase().getSleuthkitCase().getCommunicationsManager();
-
         } catch (IllegalStateException ex) {
             logger.log(Level.SEVERE, "Can't get CommunicationsManager when there is no case open.", ex);
         } catch (TskCoreException ex) {
@@ -357,7 +369,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     @Override
     public void removeNotify() {
         super.removeNotify();
-//        IngestManager.getInstance().removeIngestModuleEventListener(ingestListener);
     }
 
     /**
@@ -371,10 +382,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
 
         splitPane = new JSplitPane();
         borderLayoutPanel = new JPanel();
-        jToolBar2 = new JToolBar();
-        statusLabel = new JLabel();
-        progresPanel = new JPanel();
-        progressBar = new JProgressBar();
         placeHolderPanel = new JPanel();
         jTextArea1 = new JTextArea();
         toolbar = new JPanel();
@@ -398,35 +405,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
 
         borderLayoutPanel.setLayout(new BorderLayout());
 
-        jToolBar2.setFloatable(false);
-        jToolBar2.setRollover(true);
-
-        statusLabel.setText(NbBundle.getMessage(VisualizationPanel.class, "VisualizationPanel.statusLabel.text")); // NOI18N
-        jToolBar2.add(statusLabel);
-
-        progresPanel.setMinimumSize(new Dimension(0, 20));
-        progresPanel.setName(""); // NOI18N
-
-        progressBar.setMaximumSize(new Dimension(200, 14));
-        progressBar.setStringPainted(true);
-
-        GroupLayout progresPanelLayout = new GroupLayout(progresPanel);
-        progresPanel.setLayout(progresPanelLayout);
-        progresPanelLayout.setHorizontalGroup(progresPanelLayout.createParallelGroup(GroupLayout.LEADING)
-            .add(GroupLayout.TRAILING, progresPanelLayout.createSequentialGroup()
-                .add(0, 447, Short.MAX_VALUE)
-                .add(progressBar, GroupLayout.PREFERRED_SIZE, 350, GroupLayout.PREFERRED_SIZE))
-        );
-        progresPanelLayout.setVerticalGroup(progresPanelLayout.createParallelGroup(GroupLayout.LEADING)
-            .add(GroupLayout.TRAILING, progresPanelLayout.createSequentialGroup()
-                .add(0, 0, 0)
-                .add(progressBar, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-        );
-
-        jToolBar2.add(progresPanel);
-
-        borderLayoutPanel.add(jToolBar2, BorderLayout.PAGE_END);
-
         jTextArea1.setBackground(new Color(240, 240, 240));
         jTextArea1.setColumns(20);
         jTextArea1.setLineWrap(true);
@@ -437,15 +415,15 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         placeHolderPanel.setLayout(placeHolderPanelLayout);
         placeHolderPanelLayout.setHorizontalGroup(placeHolderPanelLayout.createParallelGroup(GroupLayout.LEADING)
             .add(GroupLayout.TRAILING, placeHolderPanelLayout.createSequentialGroup()
-                .addContainerGap(213, Short.MAX_VALUE)
+                .addContainerGap(208, Short.MAX_VALUE)
                 .add(jTextArea1, GroupLayout.PREFERRED_SIZE, 372, GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(214, Short.MAX_VALUE))
+                .addContainerGap(209, Short.MAX_VALUE))
         );
         placeHolderPanelLayout.setVerticalGroup(placeHolderPanelLayout.createParallelGroup(GroupLayout.LEADING)
             .add(GroupLayout.TRAILING, placeHolderPanelLayout.createSequentialGroup()
-                .addContainerGap(200, Short.MAX_VALUE)
+                .addContainerGap(213, Short.MAX_VALUE)
                 .add(jTextArea1, GroupLayout.PREFERRED_SIZE, 43, GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(200, Short.MAX_VALUE))
+                .addContainerGap(214, Short.MAX_VALUE))
         );
 
         borderLayoutPanel.add(placeHolderPanel, BorderLayout.CENTER);
@@ -638,7 +616,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     }
 
     private void fitGraph() {
-
         graphComponent.zoomTo(1, true);
         mxPoint translate = graph.getView().getTranslate();
         if (translate == null || Double.isNaN(translate.getX()) || Double.isNaN(translate.getY())) {
@@ -651,7 +628,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         }
         final mxPoint mxPoint = new mxPoint(translate.getX() - boundsForCells.getX(), translate.getY() - boundsForCells.getY());
 
-//        graph.getView().setTranslate(mxPoint);
         graph.cellsMoved(graph.getChildCells(graph.getDefaultParent()), mxPoint.getX(), mxPoint.getY(), false, false);
 
         boundsForCells = graph.getCellBounds(graph.getDefaultParent(), true, true, true);
@@ -662,7 +638,7 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         Dimension size = graphComponent.getSize();
         double widthFactor = size.getWidth() / boundsForCells.getWidth();
 
-        graphComponent.zoom(widthFactor);//, true);
+        graphComponent.zoom(widthFactor);
 
     }
 
@@ -670,27 +646,47 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         // layout using morphing
         graph.getModel().beginUpdate();
 
-        progressBar.setVisible(true);
-        progressBar.setIndeterminate(true);
-        progressBar.setString("applying layout");
-
-        new SwingWorker<Void, Void>() {
+        CancelationListener cancelationListener = new CancelationListener();
+        ModalDialogProgressIndicator progress = new ModalDialogProgressIndicator(windowAncestor, "Computing layout", new String[]{CANCEL}, CANCEL, cancelationListener);
+        SwingWorker<Void, Void> morphWorker = new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
+                progress.start("Computing layout");
                 layout.execute(graph.getDefaultParent());
-                mxMorphing morph = new mxMorphing(graphComponent, 20, 1.2, 20);
+                if (isCancelled()) {
+                    progress.finish();
+                    return null;
+                }
+                mxMorphing morph = new mxMorphing(graphComponent, 20, 1.2, 20) {
+                    @Override
+                    public void updateAnimation() {
+                        fireEvent(new mxEventObject(mxEvent.EXECUTE));
+                        super.updateAnimation(); //To change body of generated methods, choose Tools | Templates.
+                    }
+
+                };
+                morph.addListener(mxEvent.EXECUTE, (Object sender, mxEventObject evt) -> {
+                    if (isCancelled()) {
+                        morph.stopAnimation();
+                    }
+                });
                 morph.addListener(mxEvent.DONE, (Object sender, mxEventObject event) -> {
                     graph.getModel().endUpdate();
-                    fitGraph();
-                    progressBar.setVisible(false);
-                    progressBar.setValue(0);
+                    if (isCancelled()) {
+                        undoManager.undo();
+                    } else {
+                        fitGraph();
+                    }
+                    progress.finish();
                 });
 
                 morph.startAnimation();
                 return null;
-            }
-        }.execute();
 
+            }
+        };
+        cancelationListener.configure(morphWorker, progress);
+        morphWorker.execute();
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
@@ -703,13 +699,9 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
     private JLabel jLabel2;
     private JToolBar.Separator jSeparator1;
     private JTextArea jTextArea1;
-    private JToolBar jToolBar2;
     private JButton organicLayoutButton;
     private JPanel placeHolderPanel;
-    private JPanel progresPanel;
-    private JProgressBar progressBar;
     private JSplitPane splitPane;
-    private JLabel statusLabel;
     private JPanel toolbar;
     private JButton zoomActualButton;
     private JButton zoomInButton;
@@ -731,11 +723,24 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
                 HashSet<AccountDeviceInstance> adis = new HashSet<>();
                 for (mxICell cell : selectedCells) {
                     if (cell.isEdge()) {
-                        relationshipSources.addAll((Set<Content>) cell.getValue());
+                        mxICell source = (mxICell) graph.getModel().getTerminal(cell, true);
+                        AccountDeviceInstanceKey account1 = (AccountDeviceInstanceKey) source.getValue();
+                        mxICell target = (mxICell) graph.getModel().getTerminal(cell, false);
+                        AccountDeviceInstanceKey account2 = (AccountDeviceInstanceKey) target.getValue();
+                        try {
+                            final List<Content> relationshipSources1 = commsManager.getRelationshipSources(
+                                    account1.getAccountDeviceInstance(),
+                                    account2.getAccountDeviceInstance(),
+                                    currentFilter);
+                            relationshipSources.addAll(relationshipSources1);
+                        } catch (TskCoreException tskCoreException) {
+                            logger.log(Level.SEVERE, " Error getting relationsips....", tskCoreException);
+                        }
                     } else if (cell.isVertex()) {
                         adis.add(((AccountDeviceInstanceKey) cell.getValue()).getAccountDeviceInstance());
                     }
                 }
+
                 rootNode = SelectionNode.createFromAccountsAndRelationships(relationshipSources, adis, currentFilter, commsManager);
                 selectedNodes = new Node[]{rootNode};
             }
@@ -748,79 +753,6 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         }
     }
 
-    final private class ProgressIndicatorImpl implements ProgressIndicator {
-
-        @Override
-        public void start(String message, int totalWorkUnits) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setVisible(true);
-                progressBar.setIndeterminate(false);
-                progressBar.setString(message);
-                progressBar.setMaximum(totalWorkUnits);
-                progressBar.setValue(0);
-            });
-        }
-
-        @Override
-        public void start(String message) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setVisible(true);
-                progressBar.setString(message);
-                progressBar.setIndeterminate(true);
-            });
-        }
-
-        @Override
-        public void switchToIndeterminate(String message) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setVisible(true);
-                progressBar.setIndeterminate(true);
-                progressBar.setString(message);
-            });
-        }
-
-        @Override
-        public void switchToDeterminate(String message, int workUnitsCompleted, int totalWorkUnits) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setVisible(true);
-                progressBar.setIndeterminate(false);
-                progressBar.setString(message);
-                progressBar.setMaximum(totalWorkUnits);
-                progressBar.setValue(workUnitsCompleted);
-            });
-        }
-
-        @Override
-        public void progress(String message) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setString(message);
-            });
-        }
-
-        @Override
-        public void progress(int workUnitsCompleted) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setValue(workUnitsCompleted);
-            });
-        }
-
-        @Override
-        public void progress(String message, int workUnitsCompleted) {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setString(message);
-                progressBar.setValue(workUnitsCompleted);
-            });
-        }
-
-        @Override
-        public void finish() {
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setValue(progressBar.getValue());
-                progressBar.setVisible(false);
-            });
-        }
-    }
-
     final private class mxFastOrganicLayoutImpl extends mxFastOrganicLayout {
 
         mxFastOrganicLayoutImpl(mxGraph graph) {
@@ -830,7 +762,7 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         @Override
         public boolean isVertexIgnored(Object vertex) {
             return super.isVertexIgnored(vertex)
-                    || VisualizationPanel.this.graph.isVertexLocked((mxCell) vertex);
+                    || lockedVertexModel.isVertexLocked((mxCell) vertex);
         }
 
         @Override
@@ -853,7 +785,7 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         @Override
         public boolean isVertexIgnored(Object vertex) {
             return super.isVertexIgnored(vertex)
-                    || VisualizationPanel.this.graph.isVertexLocked((mxCell) vertex);
+                    || lockedVertexModel.isVertexLocked((mxCell) vertex);
         }
 
         @Override
@@ -876,7 +808,7 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         @Override
         public boolean isVertexIgnored(Object vertex) {
             return super.isVertexIgnored(vertex)
-                    || VisualizationPanel.this.graph.isVertexLocked((mxCell) vertex);
+                    || lockedVertexModel.isVertexLocked((mxCell) vertex);
         }
 
         @Override
@@ -898,7 +830,7 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
         @Override
         public boolean isVertexIgnored(Object vertex) {
             return super.isVertexIgnored(vertex)
-                    || VisualizationPanel.this.graph.isVertexLocked((mxCell) vertex);
+                    || lockedVertexModel.isVertexLocked((mxCell) vertex);
         }
 
         @Override
@@ -909,5 +841,24 @@ final public class VisualizationPanel extends JPanel implements Lookup.Provider 
                 return super.setVertexLocation(vertex, x, y);
             }
         }
+    }
+
+    private class CancelationListener implements ActionListener {
+
+        private Future<?> cancellable;
+        private ModalDialogProgressIndicator progress;
+
+        void configure(Future<?> cancellable, ModalDialogProgressIndicator progress) {
+            this.cancellable = cancellable;
+            this.progress = progress;
+        }
+
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            progress.setCancelling("Cancelling...");
+            cancellable.cancel(true);
+            progress.finish();
+        }
+
     }
 }
