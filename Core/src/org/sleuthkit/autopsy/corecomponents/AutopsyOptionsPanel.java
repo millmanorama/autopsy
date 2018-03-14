@@ -50,16 +50,9 @@ import org.sleuthkit.autopsy.report.ReportBranding;
 /**
  * Options panel that allow users to set application preferences.
  */
-@Messages({"AutopsyOptionsPanel.agencyLogoPreview.text=<html><div style='text-align: center;'>No logo<br>selected</div></html>",
-    "AutopsyOptionsPanel.logoPanel.border.title=Logo",
-    "AutopsyOptionsPanel.viewPanel.border.title=View",
+@Messages({
     "AutopsyOptionsPanel.invalidImageFile.msg=The selected file was not able to be used as an agency logo.",
     "AutopsyOptionsPanel.invalidImageFile.title=Invalid Image File",
-    "AutopsyOptionsPanel.restartNecessaryWarning.text=A restart is necessary for any changes to max memory to take effect.",
-    "AutopsyOptionsPanel.totalMemoryLabel.text=Total System Memory:",
-    "AutopsyOptionsPanel.maxMemoryLabel.text=Maximum JVM Memory:",
-    "AutopsyOptionsPanel.maxMemoryUnitsLabel.text=GB",
-    "AutopsyOptionsPanel.runtimePanel.border.title=Runtime",
     "AutopsyOptionsPanel.memFieldValidationLabel.not64BitInstall.text=JVM memory settings only enabled for 64 bit version",
     "AutopsyOptionsPanel.memFieldValidationLabel.noValueEntered.text=No value entered",
     "AutopsyOptionsPanel.memFieldValidationLabel.invalidCharacters.text=Invalid characters, value must be a positive integer",
@@ -68,13 +61,9 @@ import org.sleuthkit.autopsy.report.ReportBranding;
     "# {0} - systemMemory",
     "AutopsyOptionsPanel.memFieldValidationLabel.overMaxMemory.text=Value must be less than the total system memory of {0}GB",
     "AutopsyOptionsPanel.memFieldValidationLabel.developerMode.text=Memory settings are not available while running in developer mode",
-    "AutopsyOptionsPanel.defaultLogoRB.text=Use default",
-    "AutopsyOptionsPanel.specifyLogoRB.text=Specify a logo",
-    "AutopsyOptionsPanel.browseLogosButton.text=Browse",
     "AutopsyOptionsPanel.agencyLogoPathFieldValidationLabel.invalidPath.text=Path is not valid.",
     "AutopsyOptionsPanel.agencyLogoPathFieldValidationLabel.invalidImageSpecified.text=Invalid image file specified.",
     "AutopsyOptionsPanel.agencyLogoPathFieldValidationLabel.pathNotSet.text=Agency logo path must be set.",
-    "AutopsyOptionsPanel.maxLogFileCount.text=Maximum Log Files:",
     "AutopsyOptionsPanel.logNumAlert.invalidInput.text=A positive integer is required here."
 })
 
@@ -341,7 +330,7 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
     private void updateAgencyLogo(String path) throws IOException {
         agencyLogoPathField.setText(path);
         ImageIcon agencyLogoIcon = new ImageIcon();
-        agencyLogoPreview.setText(Bundle.AutopsyOptionsPanel_agencyLogoPreview_text());
+        agencyLogoPreview.setText(NbBundle.getMessage(AutopsyOptionsPanel.class, "AutopsyOptionsPanel.agencyLogoPreview.text"));
         if (!agencyLogoPathField.getText().isEmpty()) {
             File file = new File(agencyLogoPathField.getText());
             if (file.exists()) {
@@ -572,11 +561,15 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
         logFileCount = new javax.swing.JTextField();
         logNumAlert = new javax.swing.JTextField();
 
-        jScrollPane1.setBorder(null);
+        setPreferredSize(new java.awt.Dimension(1022, 488));
 
-        jPanel1.setPreferredSize(new java.awt.Dimension(671, 488));
+        jScrollPane1.setBorder(null);
+        jScrollPane1.setPreferredSize(new java.awt.Dimension(1022, 407));
+
+        jPanel1.setPreferredSize(new java.awt.Dimension(1022, 407));
 
         logoPanel.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(AutopsyOptionsPanel.class, "AutopsyOptionsPanel.logoPanel.border.title"))); // NOI18N
+        logoPanel.setPreferredSize(new java.awt.Dimension(533, 87));
 
         agencyLogoPathField.setText(org.openide.util.NbBundle.getMessage(AutopsyOptionsPanel.class, "AutopsyOptionsPanel.agencyLogoPathField.text")); // NOI18N
 
@@ -620,14 +613,14 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, logoPanelLayout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(logoPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(specifyLogoRB, javax.swing.GroupLayout.PREFERRED_SIZE, 93, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(defaultLogoRB, javax.swing.GroupLayout.PREFERRED_SIZE, 81, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(specifyLogoRB)
+                    .addComponent(defaultLogoRB))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(logoPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(logoPanelLayout.createSequentialGroup()
                         .addComponent(agencyLogoPathField, javax.swing.GroupLayout.PREFERRED_SIZE, 259, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(browseLogosButton, javax.swing.GroupLayout.PREFERRED_SIZE, 67, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(browseLogosButton))
                     .addComponent(agencyLogoPathFieldValidationLabel))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(agencyLogoPreview, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -830,33 +823,38 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
                 .addContainerGap()
                 .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(runtimePanelLayout.createSequentialGroup()
-                        .addComponent(totalMemoryLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(totalMemoryLabel)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(systemMemoryTotal, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(2, 2, 2)
+                        .addGap(6, 6, 6)
                         .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(runtimePanelLayout.createSequentialGroup()
-                                .addComponent(maxMemoryUnitsLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 17, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(maxMemoryUnitsLabel1)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(restartNecessaryWarning, javax.swing.GroupLayout.DEFAULT_SIZE, 333, Short.MAX_VALUE))
+                                .addComponent(restartNecessaryWarning, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                             .addGroup(runtimePanelLayout.createSequentialGroup()
-                                .addComponent(maxMemoryUnitsLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 17, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(maxMemoryUnitsLabel)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(memFieldValidationLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 263, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(memFieldValidationLabel)
                                 .addGap(0, 0, Short.MAX_VALUE))))
                     .addGroup(runtimePanelLayout.createSequentialGroup()
-                        .addComponent(maxMemoryLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(maxMemoryLabel)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(memField, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(0, 0, Short.MAX_VALUE))
                     .addGroup(runtimePanelLayout.createSequentialGroup()
-                        .addComponent(maxLogFileCount, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(maxLogFileCount)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(logFileCount, javax.swing.GroupLayout.PREFERRED_SIZE, 37, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(18, 18, 18)
                         .addComponent(logNumAlert)))
                 .addContainerGap())
         );
+
+        runtimePanelLayout.linkSize(javax.swing.SwingConstants.HORIZONTAL, new java.awt.Component[] {maxLogFileCount, maxMemoryLabel, totalMemoryLabel});
+
+        runtimePanelLayout.linkSize(javax.swing.SwingConstants.HORIZONTAL, new java.awt.Component[] {logFileCount, memField});
+
         runtimePanelLayout.setVerticalGroup(
             runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(runtimePanelLayout.createSequentialGroup()
@@ -864,19 +862,19 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
                 .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addComponent(totalMemoryLabel)
                     .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(restartNecessaryWarning, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(maxMemoryUnitsLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(restartNecessaryWarning)
+                        .addComponent(maxMemoryUnitsLabel1))
                     .addComponent(systemMemoryTotal, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                     .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(maxMemoryLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(maxMemoryLabel)
                         .addComponent(memField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(maxMemoryUnitsLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addComponent(memFieldValidationLabel, javax.swing.GroupLayout.PREFERRED_SIZE, 17, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(maxMemoryUnitsLabel))
+                    .addComponent(memFieldValidationLabel))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(runtimePanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(maxLogFileCount, javax.swing.GroupLayout.PREFERRED_SIZE, 19, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(maxLogFileCount)
                     .addComponent(logFileCount, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(logNumAlert, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
@@ -889,7 +887,7 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(logoPanel, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(logoPanel, javax.swing.GroupLayout.DEFAULT_SIZE, 1010, Short.MAX_VALUE)
                     .addGroup(jPanel1Layout.createSequentialGroup()
                         .addComponent(viewPanel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
@@ -914,11 +912,13 @@ final class AutopsyOptionsPanel extends javax.swing.JPanel {
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 1010, Short.MAX_VALUE)
+            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 479, Short.MAX_VALUE)
+                .addGap(0, 0, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
