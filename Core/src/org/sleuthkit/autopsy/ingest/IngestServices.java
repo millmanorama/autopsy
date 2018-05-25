@@ -104,7 +104,12 @@ public final class IngestServices {
      *
      * @param moduleDataEvent A module data event, i.e., an event that
      *                        encapsulates artifact data.
+     *
+     * @deprecated Instead of calling this method directly, modules should call
+     * Blackboard.postArtifact(), which will result in a ModuleDataEvent being
+     * fired.
      */
+    @Deprecated
     public void fireModuleDataEvent(ModuleDataEvent moduleDataEvent) {
         IngestManager.getInstance().fireIngestModuleDataEvent(moduleDataEvent);
     }

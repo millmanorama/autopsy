@@ -168,8 +168,12 @@ class TextMessageAnalyzer {
 
                     bba.addAttributes(attributes);
                     try {
-                        // index the artifact for keyword search
-                        blackboard.postArtifact(bba);
+                        /*
+                         * Post the artifact to the blackboard. This will index
+                         * the artifact for keyword search, and notify the UI
+                         * via a ModuleDataEvent.
+                         */
+                        blackboard.postArtifact(iOSModuleFactory.getModuleName(), bba);
                     } catch (Blackboard.BlackboardException ex) {
                         logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
                         MessageNotifyUtil.Notify.error(

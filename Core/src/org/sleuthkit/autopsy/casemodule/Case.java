@@ -35,6 +35,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,6 +59,7 @@ import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.NbBundle.Messages;
@@ -101,6 +103,8 @@ import org.sleuthkit.autopsy.events.AutopsyEventException;
 import org.sleuthkit.autopsy.events.AutopsyEventPublisher;
 import org.sleuthkit.autopsy.ingest.IngestJob;
 import org.sleuthkit.autopsy.ingest.IngestManager;
+import org.sleuthkit.autopsy.ingest.IngestServices;
+import org.sleuthkit.autopsy.ingest.ModuleDataEvent;
 import org.sleuthkit.autopsy.keywordsearchservice.KeywordSearchService;
 import org.sleuthkit.autopsy.keywordsearchservice.KeywordSearchServiceException;
 import org.sleuthkit.autopsy.progress.LoggingProgressIndicator;
@@ -108,6 +112,8 @@ import org.sleuthkit.autopsy.progress.ModalDialogProgressIndicator;
 import org.sleuthkit.autopsy.progress.ProgressIndicator;
 import org.sleuthkit.autopsy.timeline.OpenTimelineAction;
 import org.sleuthkit.autopsy.timeline.events.EventAddedEvent;
+import org.sleuthkit.datamodel.Blackboard;
+import org.sleuthkit.datamodel.BlackboardArtifact;
 import org.sleuthkit.datamodel.BlackboardArtifactTag;
 import org.sleuthkit.datamodel.CaseDbConnectionInfo;
 import org.sleuthkit.datamodel.Content;
@@ -148,7 +154,7 @@ public class Case {
     private CollaborationMonitor collaborationMonitor;
     private Services caseServices;
     private boolean hasDataSources;
-    private final TSKCaseRepublisher tskEventForwarder = new TSKCaseRepublisher();
+    private final TSKCaseRepublisher tskEventRepublisher = new TSKCaseRepublisher();
 
     /*
      * Get a reference to the main window of the desktop application to use to
@@ -386,8 +392,23 @@ public class Case {
     private final class TSKCaseRepublisher {
 
         @Subscribe
-        public void handleTimelineEventCreated(TimelineManager.EventAddedEvent event) {
+        public void handleEvent(TimelineManager.EventAddedEvent event) {
             eventPublisher.publish(new EventAddedEvent(event));
+        }
+
+        @Messages({"TSKCaseRepublisher.handleArtifactPostedEvent.errorMessage=Error getting Type of BlackBoardArtifact."})
+        @Subscribe
+        @SuppressWarnings("deprecation")//we are still using the deprecated method, even though modules shouldn't use it directly.
+        public void handleEvent(Blackboard.ArtifactPostedEvent event) {
+            try {
+                IngestServices.getInstance().fireModuleDataEvent(new ModuleDataEvent(event.getModuleName(),
+                        event.getArtifact().getArtifactType(),
+                        Collections.singleton(event.getArtifact()))
+                );
+            } catch (TskCoreException ex) {
+                MessageNotifyUtil.Notify.error("Error", LOG_FOLDER);
+                logger.log(Level.SEVERE, Bundle.TSKCaseRepublisher_handleArtifactPostedEvent_errorMessage(), ex);
+            }
         }
     }
 
@@ -2064,7 +2085,7 @@ public class Case {
             }
         }
 
-        caseDb.registerForEvents(tskEventForwarder);
+        caseDb.registerForEvents(tskEventRepublisher);
     }
 
     /**
@@ -2286,7 +2307,7 @@ public class Case {
          */
         if (null != caseDb) {
             progressIndicator.progress(Bundle.Case_progressMessage_closingCaseDatabase());
-            caseDb.unregisterForEvents(tskEventForwarder);
+            caseDb.unregisterForEvents(tskEventRepublisher);
             caseDb.close();
         }
 

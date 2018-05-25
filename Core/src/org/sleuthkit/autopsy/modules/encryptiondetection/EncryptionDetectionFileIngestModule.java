@@ -125,10 +125,10 @@ final class EncryptionDetectionFileIngestModule extends FileIngestModuleAdapter 
              * Qualify the file type.
              */
             if (!file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.UNALLOC_BLOCKS)
-                    && !file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.UNUSED_BLOCKS)
-                    && !file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.VIRTUAL_DIR)
-                    && !file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.LOCAL_DIR)
-                    && (!file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.SLACK) || slackFilesAllowed)) {
+                && !file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.UNUSED_BLOCKS)
+                && !file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.VIRTUAL_DIR)
+                && !file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.LOCAL_DIR)
+                && (!file.getType().equals(TskData.TSK_DB_FILES_TYPE_ENUM.SLACK) || slackFilesAllowed)) {
                 /*
                  * Qualify the file against hash databases.
                  */
@@ -189,17 +189,14 @@ final class EncryptionDetectionFileIngestModule extends FileIngestModuleAdapter 
 
             try {
                 /*
-                 * Index the artifact for keyword search.
+                 * post the artifact to the blackboard. This will index the
+                 * artifact for keyword search, and notify the UI via a
+                 * ModuleDataEvent.
                  */
-                blackboard.postArtifact(artifact);
+                blackboard.postArtifact(EncryptionDetectionModuleFactory.getModuleName(), artifact);
             } catch (Blackboard.BlackboardException ex) {
                 logger.log(Level.SEVERE, "Unable to index blackboard artifact " + artifact.getArtifactID(), ex); //NON-NLS
             }
-
-            /*
-             * Send an event to update the view with the new result.
-             */
-            services.fireModuleDataEvent(new ModuleDataEvent(EncryptionDetectionModuleFactory.getModuleName(), artifactType, Collections.singletonList(artifact)));
 
             /*
              * Make an ingest inbox message.
@@ -376,7 +373,7 @@ final class EncryptionDetectionFileIngestModule extends FileIngestModuleAdapter 
                 fileSizeQualified = true;
             }
         }
-        
+
         if (fileSizeQualified) {
             /*
              * Qualify the entropy.
@@ -386,7 +383,7 @@ final class EncryptionDetectionFileIngestModule extends FileIngestModuleAdapter 
                 possiblyEncrypted = true;
             }
         }
-        
+
         return possiblyEncrypted;
     }
 }

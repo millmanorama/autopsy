@@ -157,7 +157,13 @@ public class FileTypeIdIngestModule implements FileIngestModule {
             attributes.add(ruleNameAttribute);
             artifact.addAttributes(attributes);
             try {
-                Case.getCurrentCaseThrows().getSleuthkitCase().getBlackboard().postArtifact(artifact);
+
+                /*
+                 * Post the artifact to the blackboard. This will index the
+                 * artifact for keyword search, and notify the UI via a
+                 * ModuleDataEvent.
+                 */
+                Case.getCurrentCaseThrows().getSleuthkitCase().getBlackboard().postArtifact(FileTypeIdModuleFactory.getModuleName(), artifact);
             } catch (Blackboard.BlackboardException ex) {
                 logger.log(Level.SEVERE, String.format("Unable to index TSK_INTERESTING_FILE_HIT blackboard artifact %d (file obj_id=%d)", artifact.getArtifactID(), file.getId()), ex); //NON-NLS
             } catch (NoCurrentCaseException ex) {

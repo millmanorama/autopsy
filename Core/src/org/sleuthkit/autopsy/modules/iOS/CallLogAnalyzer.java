@@ -59,7 +59,7 @@ final class CallLogAnalyzer {
 
     /**
      * Find call logs given an ingest job context and index the results.
-     * 
+     *
      * @param context The ingest job context.
      */
     public void findCallLogs(IngestJobContext context) {
@@ -98,7 +98,7 @@ final class CallLogAnalyzer {
 
     /**
      * Index results for call logs found in the database.
-     * 
+     *
      * @param DatabasePath The path to the database.
      * @param fileId       The ID of the file associated with artifacts.
      */
@@ -162,8 +162,12 @@ final class CallLogAnalyzer {
 
                     bba.addAttributes(attributes);
                     try {
-                        // index the artifact for keyword search
-                        blackboard.postArtifact(bba);
+                        /*
+                         * Post the artifact to the blackboard. This will index
+                         * the artifact for keyword search, and notify the UI
+                         * via a ModuleDataEvent.
+                         */
+                        blackboard.postArtifact(iOSModuleFactory.getModuleName(), bba);
                     } catch (Blackboard.BlackboardException ex) {
                         logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
                         MessageNotifyUtil.Notify.error(

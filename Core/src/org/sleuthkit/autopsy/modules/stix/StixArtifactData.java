@@ -43,13 +43,13 @@ class StixArtifactData {
     private final String objType;
     private static final Logger logger = Logger.getLogger(StixArtifactData.class.getName());
 
-    public StixArtifactData(AbstractFile a_file, String a_observableId, String a_objType) {
+    StixArtifactData(AbstractFile a_file, String a_observableId, String a_objType) {
         file = a_file;
         observableId = a_observableId;
         objType = a_objType;
     }
 
-    public StixArtifactData(long a_objId, String a_observableId, String a_objType) {
+    StixArtifactData(long a_objId, String a_observableId, String a_objType) {
         try {
             Case case1 = Case.getCurrentCaseThrows();
             SleuthkitCase sleuthkitCase = case1.getSleuthkitCase();
@@ -88,15 +88,14 @@ class StixArtifactData {
 
         bba.addAttributes(attributes);
         try {
-            // index the artifact for keyword search
-            blackboard.postArtifact(bba);
+            /*
+             * Post the artifact to the blackboard. This will index the artifact
+             * for keyword search, and notify the UI via a ModuleDataEvent.
+             */
+            blackboard.postArtifact(STIXReportModule.getDefault().getName(), bba);
         } catch (Blackboard.BlackboardException ex) {
             logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
             MessageNotifyUtil.Notify.error(Bundle.StixArtifactData_indexError_message(), bba.getDisplayName());
         }
-    }
-
-    public void print() {
-        System.out.println("  " + observableId + " " + file.getName());
     }
 }

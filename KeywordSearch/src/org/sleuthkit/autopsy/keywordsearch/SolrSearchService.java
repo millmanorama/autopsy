@@ -436,7 +436,6 @@ public class SolrSearchService implements KeywordSearchService, AutopsyService {
         try {
             index(bba);
         } catch (TskCoreException ex) {
-            //TODO: is this the right error handling?
             logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
             MessageNotifyUtil.Notify.error(Bundle.SolrSearchService_indexingError(), bba.getDisplayName());
         }

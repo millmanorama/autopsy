@@ -245,7 +245,7 @@ final class IngestModule implements FileIngestModule {
 
         // Don't allow sqlite central repo databases to be used for multi user cases
         if ((autopsyCase.getCaseType() == Case.CaseType.MULTI_USER_CASE)
-                && (EamDbPlatformEnum.getSelectedPlatform() == EamDbPlatformEnum.SQLITE)) {
+            && (EamDbPlatformEnum.getSelectedPlatform() == EamDbPlatformEnum.SQLITE)) {
             logger.log(Level.SEVERE, "Cannot run correlation engine on a multi-user case with a SQLite central repository.");
             throw new IngestModuleException("Cannot run on a multi-user case with a SQLite central repository."); // NON-NLS
         }
@@ -291,7 +291,7 @@ final class IngestModule implements FileIngestModule {
         // if we are the first thread / module for this job, then make sure the case
         // and image exist in the DB before we associate artifacts with it.
         if (refCounter.incrementAndGet(jobId)
-                == 1) {
+            == 1) {
             // ensure we have this data source in the EAM DB
             try {
                 if (null == centralRepoDb.getDataSource(eamCase, eamDataSource.getDeviceID())) {
@@ -318,8 +318,12 @@ final class IngestModule implements FileIngestModule {
             tifArtifact.addAttribute(att2);
 
             try {
-                // index the artifact for keyword search
-                blackboard.postArtifact(tifArtifact);
+                /*
+                 * post the artifact to the blackboard. This will index the
+                 * artifact for keyword search, and notify the UI via a
+                 * ModuleDataEvent.
+                 */
+                blackboard.postArtifact(MODULE_NAME, tifArtifact);
             } catch (Blackboard.BlackboardException ex) {
                 logger.log(Level.SEVERE, "Unable to index blackboard artifact " + tifArtifact.getArtifactID(), ex); //NON-NLS
             }
@@ -327,8 +331,6 @@ final class IngestModule implements FileIngestModule {
             // send inbox message
             sendBadFileInboxMessage(tifArtifact, abstractFile.getName(), abstractFile.getMd5Hash());
 
-            // fire event to notify UI of this new artifact
-            services.fireModuleDataEvent(new ModuleDataEvent(MODULE_NAME, BlackboardArtifact.ARTIFACT_TYPE.TSK_INTERESTING_FILE_HIT));
         } catch (TskCoreException ex) {
             logger.log(Level.SEVERE, "Failed to create BlackboardArtifact.", ex); // NON-NLS
         } catch (IllegalStateException ex) {

@@ -720,15 +720,17 @@ class SevenZipExtractor {
                 artifact.addAttribute(new BlackboardAttribute(BlackboardAttribute.ATTRIBUTE_TYPE.TSK_COMMENT, EmbeddedFileExtractorModuleFactory.getModuleName(), encryptionType));
 
                 try {
-                    // index the artifact for keyword search
-                    blackboard.postArtifact(artifact);
+                    /*
+                     * post the artifact to the blackboard. This will index the
+                     * artifact for keyword search, and notify the UI via a
+                     * ModuleDataEvent.
+                     */
+                    blackboard.postArtifact(EmbeddedFileExtractorModuleFactory.getModuleName(), artifact);
                 } catch (Blackboard.BlackboardException ex) {
                     logger.log(Level.SEVERE, "Unable to index blackboard artifact " + artifact.getArtifactID(), ex); //NON-NLS
                     MessageNotifyUtil.Notify.error(
                             Bundle.SevenZipExtractor_indexError_message(), artifact.getDisplayName());
                 }
-
-                services.fireModuleDataEvent(new ModuleDataEvent(EmbeddedFileExtractorModuleFactory.getModuleName(), BlackboardArtifact.ARTIFACT_TYPE.TSK_ENCRYPTION_DETECTED));
             } catch (TskCoreException ex) {
                 logger.log(Level.SEVERE, "Error creating blackboard artifact for encryption detected for file: " + escapedArchiveFilePath, ex); //NON-NLS
             }

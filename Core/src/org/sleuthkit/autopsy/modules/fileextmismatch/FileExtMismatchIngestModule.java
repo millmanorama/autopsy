@@ -40,6 +40,7 @@ import org.sleuthkit.datamodel.AbstractFile;
 import org.sleuthkit.datamodel.Blackboard;
 import org.sleuthkit.datamodel.BlackboardArtifact;
 import org.sleuthkit.datamodel.BlackboardArtifact.ARTIFACT_TYPE;
+import org.sleuthkit.datamodel.TskCoreException;
 import org.sleuthkit.datamodel.TskData;
 import org.sleuthkit.datamodel.TskData.FileKnown;
 import org.sleuthkit.datamodel.TskException;
@@ -145,17 +146,20 @@ public class FileExtMismatchIngestModule implements FileIngestModule {
                 BlackboardArtifact bart = abstractFile.newArtifact(ARTIFACT_TYPE.TSK_EXT_MISMATCH_DETECTED);
 
                 try {
-                    // index the artifact for keyword search
-                    blackboard.postArtifact(bart);
+                    /*
+                     * Post the artifact to the blackboard. This will index the
+                     * artifact for keyword search, and notify the UI via a
+                     * ModuleDataEvent.
+                     */
+                    blackboard.postArtifact(FileExtMismatchDetectorModuleFactory.getModuleName(), bart);
                 } catch (Blackboard.BlackboardException ex) {
                     logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bart.getArtifactID(), ex); //NON-NLS
                     MessageNotifyUtil.Notify.error(FileExtMismatchDetectorModuleFactory.getModuleName(), Bundle.FileExtMismatchIngestModule_indexError_message());
                 }
-
-                services.fireModuleDataEvent(new ModuleDataEvent(FileExtMismatchDetectorModuleFactory.getModuleName(), ARTIFACT_TYPE.TSK_EXT_MISMATCH_DETECTED, Collections.singletonList(bart)));
             }
+
             return ProcessResult.OK;
-        } catch (TskException ex) {
+        } catch (TskCoreException ex) {
             logger.log(Level.WARNING, "Error matching file signature", ex); //NON-NLS
             return ProcessResult.ERROR;
         }

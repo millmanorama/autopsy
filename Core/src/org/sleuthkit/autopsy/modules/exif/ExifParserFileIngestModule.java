@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.List;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
@@ -76,7 +75,6 @@ public final class ExifParserFileIngestModule implements FileIngestModule {
     private final IngestServices services = IngestServices.getInstance();
     private final AtomicInteger filesProcessed = new AtomicInteger(0);
     private volatile boolean filesToFire = false;
-    private final List<BlackboardArtifact> listOfFacesDetectedArtifacts = new ArrayList<>();
     private long jobId;
     private static final IngestModuleReferenceCounter refCounter = new IngestModuleReferenceCounter();
     private FileTypeDetector fileTypeDetector;
@@ -111,7 +109,7 @@ public final class ExifParserFileIngestModule implements FileIngestModule {
         }
         //skip unalloc
         if ((content.getType().equals(TSK_DB_FILES_TYPE_ENUM.UNALLOC_BLOCKS)
-                || (content.getType().equals(TSK_DB_FILES_TYPE_ENUM.SLACK)))) {
+             || (content.getType().equals(TSK_DB_FILES_TYPE_ENUM.SLACK)))) {
             return ProcessResult.OK;
         }
 
@@ -213,7 +211,7 @@ public final class ExifParserFileIngestModule implements FileIngestModule {
 
                 try {
                     // index the artifact for keyword search
-                    blackboard.postArtifact(bba);
+                    blackboard.postArtifact(ExifParserModuleFactory.getModuleName(), bba);
                 } catch (Blackboard.BlackboardException ex) {
                     logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
                     MessageNotifyUtil.Notify.error(

@@ -107,7 +107,7 @@ final class FilesIdentifierIngestModule implements FileIngestModule {
     @Messages({"FilesIdentifierIngestModule.indexError.message=Failed to index interesting file hit artifact for keyword search."})
     public ProcessResult process(AbstractFile file) {
         try {
-            blackboard = Case.getCurrentCaseThrows().getSleuthkitCase().getBlackboard();        
+            blackboard = Case.getCurrentCaseThrows().getSleuthkitCase().getBlackboard();
         } catch (NoCurrentCaseException ex) {
             logger.log(Level.SEVERE, "Exception while getting open case.", ex); //NON-NLS
             return ProcessResult.ERROR;
@@ -144,14 +144,15 @@ final class FilesIdentifierIngestModule implements FileIngestModule {
 
                     artifact.addAttributes(attributes);
                     try {
-                        // index the artifact for keyword search
-                        blackboard.postArtifact(artifact);
+                        /*
+                         * Post the artifact to the blackboard. This will index
+                         * the artifact for keyword search, and notify the UI
+                         * via a ModuleDataEvent.
+                         */ blackboard.postArtifact(moduleName, artifact);
                     } catch (Blackboard.BlackboardException ex) {
                         logger.log(Level.SEVERE, "Unable to index blackboard artifact " + artifact.getArtifactID(), ex); //NON-NLS
                         MessageNotifyUtil.Notify.error(Bundle.FilesIdentifierIngestModule_indexError_message(), artifact.getDisplayName());
                     }
-
-                    services.fireModuleDataEvent(new ModuleDataEvent(moduleName, BlackboardArtifact.ARTIFACT_TYPE.TSK_INTERESTING_FILE_HIT, Collections.singletonList(artifact)));
 
                     // make an ingest inbox message
                     StringBuilder detailsSb = new StringBuilder();
