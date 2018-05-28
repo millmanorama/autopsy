@@ -52,14 +52,18 @@ public final class Blackboard implements Closeable {
      * @param artifact The artifact to be indexed.
      *
      * @throws BlackboardException If there is a problem indexing the artifact.
+     *
+     * @deprecated use org.sleuthkit.datamodel.Blackboard.postArtifact()
+     * instead.
      */
+    @Deprecated
     public synchronized void indexArtifact(BlackboardArtifact artifact) throws BlackboardException {
         if (null == delegate) {
             throw new BlackboardException("Blackboard has been closed");
         }
 
         try {
-            delegate.postArtifact("",artifact);
+            delegate.postArtifact("", artifact);
         } catch (org.sleuthkit.datamodel.Blackboard.BlackboardException ex) {
             throw new BlackboardException("Error indexing artifact", ex);
         }

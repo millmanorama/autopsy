@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.MissingResourceException;
 import java.util.logging.Level;
@@ -431,13 +432,14 @@ public class SolrSearchService implements KeywordSearchService, AutopsyService {
      */
     @NbBundle.Messages("SolrSearchService.indexingError=Unable to index blackboard artifact.")
     @Subscribe
-    void handleNewArtifact(Blackboard.ArtifactPostedEvent event) {
-        BlackboardArtifact bba = event.getArtifact();
-        try {
-            index(bba);
-        } catch (TskCoreException ex) {
-            logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
-            MessageNotifyUtil.Notify.error(Bundle.SolrSearchService_indexingError(), bba.getDisplayName());
+    void handleNewArtifact(Blackboard.ArtifactsPostedEvent event) {
+        for (BlackboardArtifact bba : event.getArtifacts()) {
+            try {
+                index(bba);
+            } catch (TskCoreException ex) {
+                logger.log(Level.SEVERE, "Unable to index blackboard artifact " + bba.getArtifactID(), ex); //NON-NLS
+                MessageNotifyUtil.Notify.error(Bundle.SolrSearchService_indexingError(), bba.getDisplayName());
+            }
         }
     }
 

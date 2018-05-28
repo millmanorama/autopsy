@@ -396,19 +396,13 @@ public class Case {
             eventPublisher.publish(new EventAddedEvent(event));
         }
 
-        @Messages({"TSKCaseRepublisher.handleArtifactPostedEvent.errorMessage=Error getting Type of BlackBoardArtifact."})
         @Subscribe
         @SuppressWarnings("deprecation")//we are still using the deprecated method, even though modules shouldn't use it directly.
-        public void handleEvent(Blackboard.ArtifactPostedEvent event) {
-            try {
-                IngestServices.getInstance().fireModuleDataEvent(new ModuleDataEvent(event.getModuleName(),
-                        event.getArtifact().getArtifactType(),
-                        Collections.singleton(event.getArtifact()))
-                );
-            } catch (TskCoreException ex) {
-                MessageNotifyUtil.Notify.error("Error", LOG_FOLDER);
-                logger.log(Level.SEVERE, Bundle.TSKCaseRepublisher_handleArtifactPostedEvent_errorMessage(), ex);
-            }
+        public void handleEvent(Blackboard.ArtifactsPostedEvent event) {
+            IngestServices.getInstance().fireModuleDataEvent(new ModuleDataEvent(event.getModuleName(),
+                    event.getArtifactType(),
+                    event.getArtifacts())
+            );
         }
     }
 
