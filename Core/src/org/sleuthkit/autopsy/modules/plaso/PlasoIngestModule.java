@@ -34,24 +34,24 @@ import org.sleuthkit.autopsy.casemodule.services.FileManager;
 import org.sleuthkit.autopsy.coreutils.ExecUtil;
 import org.sleuthkit.autopsy.coreutils.Logger;
 import org.sleuthkit.autopsy.coreutils.MessageNotifyUtil;
-import org.sleuthkit.autopsy.ingest.DataSourceIngestModule;
-import org.sleuthkit.autopsy.ingest.DataSourceIngestModuleProgress;
-import org.sleuthkit.autopsy.ingest.IngestJobContext;
-import org.sleuthkit.datamodel.Content;
-import org.sleuthkit.datamodel.Image;
-import org.sleuthkit.datamodel.TskCoreException;
 import org.sleuthkit.autopsy.coreutils.PlatformUtil;
 import org.sleuthkit.autopsy.coreutils.SQLiteDBConnect;
+import org.sleuthkit.autopsy.ingest.DataSourceIngestModule;
 import org.sleuthkit.autopsy.ingest.DataSourceIngestModuleProcessTerminator;
+import org.sleuthkit.autopsy.ingest.DataSourceIngestModuleProgress;
+import org.sleuthkit.autopsy.ingest.IngestJobContext;
 import org.sleuthkit.autopsy.ingest.IngestMessage;
 import org.sleuthkit.autopsy.ingest.IngestServices;
 import org.sleuthkit.datamodel.AbstractFile;
 import org.sleuthkit.datamodel.BlackboardArtifact;
 import org.sleuthkit.datamodel.BlackboardAttribute;
 import org.sleuthkit.datamodel.BlackboardAttribute.ATTRIBUTE_TYPE;
-import org.sleuthkit.datamodel.timeline.EventType;
+import org.sleuthkit.datamodel.Content;
+import org.sleuthkit.datamodel.Image;
 import org.sleuthkit.datamodel.SleuthkitCase;
 import org.sleuthkit.datamodel.TimeUtilities;
+import org.sleuthkit.datamodel.TskCoreException;
+import org.sleuthkit.datamodel.timeline.EventType;
 
 /**
  * Data source ingest module that runs plaso against the image 
@@ -380,6 +380,6 @@ public class PlasoIngestModule implements DataSourceIngestModule {
             }
             return EventType.REGISTRY.getTypeID();
         }
-        return EventType.CUSTOM_TYPES.getTypeID();
+        return EventType.OTHER.getTypeID();
     }
 }
