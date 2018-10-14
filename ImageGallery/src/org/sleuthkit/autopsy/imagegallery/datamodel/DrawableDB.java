@@ -110,6 +110,8 @@ public final class DrawableDB {
 
     private final PreparedStatement insertHashHitStmt;
 
+    private final PreparedStatement removeHashHitStmt;
+
     private final PreparedStatement updateDataSourceStmt;
 
     private final PreparedStatement updateFileStmt;
@@ -263,6 +265,7 @@ public final class DrawableDB {
             selectHashSetStmt = prepareStatement("SELECT hash_set_id FROM hash_sets WHERE hash_set_name = ?"); //NON-NLS
 
             insertHashHitStmt = prepareStatement("INSERT OR IGNORE INTO hash_set_hits (hash_set_id, obj_id) VALUES (?,?)"); //NON-NLS
+            removeHashHitStmt = prepareStatement("DELETE FROM hash_set_hits WHERE obj_id = ?"); //NON-NLS
 
             CaseDbTransaction caseDbTransaction = null;
             try {
@@ -271,7 +274,9 @@ public final class DrawableDB {
                     insertGroup(cat.getDisplayName(), DrawableAttribute.CATEGORY, caseDbTransaction);
                 }
                 caseDbTransaction.commit();
-            } catch (TskCoreException ex) {
+                caseDbTransaction = null;
+            } 
+            finally {
                 if (null != caseDbTransaction) {
                     try {
                         caseDbTransaction.rollback();
@@ -279,7 +284,6 @@ public final class DrawableDB {
                         logger.log(Level.SEVERE, "Error in trying to rollback transaction", ex2);
                     }
                 }
-                throw ex;
             }
 
             initializeImageList();
@@ -802,9 +806,14 @@ public final class DrawableDB {
             caseDbTransaction = tskCase.beginTransaction();
             updateFile(f, trans, caseDbTransaction);
             caseDbTransaction.commit();
+            caseDbTransaction = null;
             commitTransaction(trans, true);
+            trans = null;
 
         } catch (TskCoreException ex) {
+            logger.log(Level.SEVERE, "Error updating file", ex); //NON-NLS
+        }
+        finally {
             if (null != caseDbTransaction) {
                 try {
                     caseDbTransaction.rollback();
@@ -815,7 +824,6 @@ public final class DrawableDB {
             if (null != trans) {
                 rollbackTransaction(trans);
             }
-            logger.log(Level.SEVERE, "Error updating file", ex); //NON-NLS
         }
 
     }
@@ -1403,7 +1411,7 @@ public final class DrawableDB {
                     ds_obj_id, value, groupBy.attrName.toString());
 
             if (DbType.POSTGRESQL == tskCase.getDatabaseType()) {
-                insertSQL += "ON CONFLICT DO NOTHING";
+                insertSQL += " ON CONFLICT DO NOTHING";
             }
             tskCase.getCaseDbAccessManager().insert(GROUPS_TABLENAME, insertSQL, caseDbTransaction);
             groupCache.put(cacheKey, Boolean.TRUE);
@@ -1512,12 +1520,15 @@ public final class DrawableDB {
             // Update the list of file IDs in memory
             removeImageFileFromList(id);
 
+            //"delete from hash_set_hits where (obj_id = " + id + ")"
+            removeHashHitStmt.setLong(1, id);
+            removeHashHitStmt.executeUpdate();
+            
             //"delete from drawable_files where (obj_id = " + id + ")"
             removeFileStmt.setLong(1, id);
             removeFileStmt.executeUpdate();
             tr.addRemovedFile(id);
 
-            //TODO: delete from hash_set_hits table also...
         } catch (SQLException ex) {
             logger.log(Level.WARNING, "failed to delete row for obj_id = " + id, ex); //NON-NLS
         } finally {
