@@ -156,8 +156,7 @@ final public class DetailsViewModel {
 
         //build dynamic parts of query
         String descriptionColumn = eventManager.getDescriptionColumn(descriptionLOD);
-        final boolean useSubTypes = typeZoomLevel.equals(EventTypeZoomLevel.SUB_TYPE);
-        String typeColumn = TimelineManager.typeColumnHelper(useSubTypes);
+        String typeColumn = TimelineManager.typeColumnHelper(typeZoomLevel);
 
         TimelineDBUtils dbUtils = new TimelineDBUtils(sleuthkitCase);
         String querySql = "SELECT " + formatTimeFunctionHelper(rangeInfo.getPeriodSize().toChronoUnit(), timeZone) + " AS interval, " // NON-NLS
