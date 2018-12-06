@@ -32,7 +32,7 @@ import org.sleuthkit.datamodel.DescriptionLoD;
 import org.sleuthkit.datamodel.timeline.EventType;
 
 /**
- * Represents a set of other events clustered together. All the sub events
+ * Represents a set of events clustered together. All the sub events
  * should have the same type and matching descriptions at the designated "zoom
  * level", and be "close together" in time.
  */

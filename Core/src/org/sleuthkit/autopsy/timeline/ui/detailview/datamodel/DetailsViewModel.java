@@ -155,7 +155,6 @@ final public class DetailsViewModel {
         RangeDivision rangeInfo = RangeDivision.getRangeDivision(timeRange, timeZone);
 
         //build dynamic parts of query
-        String descriptionColumn = eventManager.getDescriptionColumn(descriptionLOD);
         String typeColumn = TimelineManager.typeColumnHelper(typeZoomLevel);
 
         TimelineDBUtils dbUtils = new TimelineDBUtils(sleuthkitCase);
@@ -163,10 +162,10 @@ final public class DetailsViewModel {
                           + dbUtils.csvAggFunction("tsk_events.event_id") + " as event_ids, " //NON-NLS
                           + dbUtils.csvAggFunction("CASE WHEN hash_hit = 1 THEN tsk_events.event_id ELSE NULL END") + " as hash_hits, " //NON-NLS
                           + dbUtils.csvAggFunction("CASE WHEN tagged = 1 THEN tsk_events.event_id ELSE NULL END") + " as taggeds, " //NON-NLS
-                          + " min(time) AS minTime, max(time) AS maxTime,  " + typeColumn + ", " + descriptionColumn // NON-NLS
+                          + " min(time) AS minTime, max(time) AS maxTime,  " + typeColumn + ", description "  // NON-NLS
                           + " FROM " + TimelineManager.getAugmentedEventsTablesSQL(filterState.getActiveFilter()) // NON-NLS
                           + " WHERE time >= " + start + " AND time < " + end + " AND " + eventManager.getSQLWhere(filterState.getActiveFilter()) // NON-NLS
-                          + " GROUP BY interval, " + typeColumn + " , " + descriptionColumn // NON-NLS
+                          + " GROUP BY interval, " + typeColumn + " , description "   // NON-NLS
                           + " ORDER BY min(time)"; // NON-NLS
 
         // perform query and map results to AggregateEvent objects
@@ -202,7 +201,7 @@ final public class DetailsViewModel {
         Interval interval = new Interval(resultSet.getLong("minTime") * 1000, resultSet.getLong("maxTime") * 1000, timeZone);
 
         List<Long> eventIDs = unGroupConcat(resultSet.getString("event_ids"), Long::valueOf); // NON-NLS
-        String description = resultSet.getString(eventManager.getDescriptionColumn(descriptionLOD));
+        String description = resultSet.getString("description");
         int eventTypeID = resultSet.getInt(typeColumn);
         EventType eventType = eventManager.getEventType(eventTypeID).orElseThrow(()
                 -> new TskCoreException("Error mapping event type id " + eventTypeID + "to EventType."));//NON-NLS
