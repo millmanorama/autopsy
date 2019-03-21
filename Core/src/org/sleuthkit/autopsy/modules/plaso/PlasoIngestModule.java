@@ -144,6 +144,8 @@ public class PlasoIngestModule implements DataSourceIngestModule {
         if (!directory.exists()) {
             directory.mkdirs();
         }
+        
+        new File(directory, "profile").mkdirs();
 
         String[] imgFile = image.getPaths();
         ProcessBuilder log2TimeLineCommand = buildLog2TimeLineCommand(moduleOutputPath, imgFile[0], image.getTimeZone());
@@ -230,6 +232,8 @@ public class PlasoIngestModule implements DataSourceIngestModule {
                 "--hasher_file_size_limit", "1", //NON-NLS
                 "--hashers", "none", //NON-NLS
                 "--no_dependencies_check", //NON-NLS
+                "--profilers", "parsers",
+                "--profiling_directory", moduleOutputPath+File.separator + "profile",
                 moduleOutputPath + File.separator + PLASO,
                 imageName
         );
