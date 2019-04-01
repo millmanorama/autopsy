@@ -19,9 +19,8 @@
 package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Sets;
 import java.util.Collection;
-import static java.util.Collections.singleton;
+import com.google.common.collect.Sets;
 import java.util.Comparator;
 import static java.util.Comparator.comparing;
 import java.util.Objects;
@@ -73,14 +72,14 @@ public final class EventStripe implements MultiEvent<EventCluster> {
      */
     private final Set<Long> hashHits;
 
-    public static EventStripe merge(EventStripe u, EventStripe v) { //NOPMD
-        Preconditions.checkNotNull(u);
-        Preconditions.checkNotNull(v);
-        Preconditions.checkArgument(Objects.equals(u.description, v.description));
-        Preconditions.checkArgument(Objects.equals(u.lod, v.lod));
-        Preconditions.checkArgument(Objects.equals(u.type, v.type));
-        Preconditions.checkArgument(Objects.equals(u.parent, v.parent));
-        return new EventStripe(u, v);
+    public static EventStripe merge(EventStripe stripeA, EventStripe stripeB) {
+        Preconditions.checkNotNull(stripeA);
+        Preconditions.checkNotNull(stripeB);
+        Preconditions.checkArgument(Objects.equals(stripeA.description, stripeB.description));
+        Preconditions.checkArgument(Objects.equals(stripeA.lod, stripeB.lod));
+        Preconditions.checkArgument(Objects.equals(stripeA.type, stripeB.type));
+        Preconditions.checkArgument(Objects.equals(stripeA.parent, stripeB.parent));
+        return new EventStripe(stripeA, stripeB);
     }
 
     public EventStripe withParent(EventCluster parent) {
@@ -90,7 +89,9 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         return new EventStripe(parent, this.type, this.description, this.lod, clusters, eventIDs, tagged, hashHits);
     }
 
-    private EventStripe(EventCluster parent, EventType type, String description, DescriptionLoD lod, SortedSet<EventCluster> clusters, Set<Long> eventIDs, Set<Long> tagged, Set<Long> hashHits) {
+    private EventStripe(EventCluster parent, EventType type, String description, DescriptionLoD lod, 
+                        DescriptionLoD lod, SortedSet<EventCluster> clusters,
+                        Set<Long> eventIDs, Set<Long> tagged, Set<Long> hashHits) {
         this.parent = parent;
         this.type = type;
         this.description = description;
@@ -105,6 +106,7 @@ public final class EventStripe implements MultiEvent<EventCluster> {
     public EventStripe(EventCluster cluster) {
         this.clusters = copyAsSortedSet(singleton(cluster.withParent(this)),
                 comparing(EventCluster::getStartMillis));
+         
 
         type = cluster.getEventType();
         description = cluster.getDescription();
@@ -115,8 +117,9 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         this.parent = null;
     }
 
-    private EventStripe(EventStripe stripeA, EventStripe stripeB) {
-        clusters = copyAsSortedSet(Sets.union(stripeB.getClusters(), stripeB.getClusters()), comparing(EventCluster::getStartMillis));
+    private EventStripe(EventStripe u, EventStripe v) {
+        clusters = Sets.union(u.getClusters(), v.getClusters())
+                .copyInto(new TreeSet<>(Comparator.comparing(EventCluster::getStartMillis)));
 
         type = stripeA.getEventType();
         description = stripeA.getDescription();

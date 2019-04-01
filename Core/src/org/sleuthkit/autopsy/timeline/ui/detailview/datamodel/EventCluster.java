@@ -18,7 +18,6 @@
  */
 package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
-import com.google.common.collect.Sets;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import java.util.Objects;
@@ -88,6 +87,7 @@ public class EventCluster implements MultiEvent<EventStripe> {
      *         events clusters
      */
     public static EventCluster merge(EventCluster cluster1, EventCluster cluster2) {
+
         if (cluster1.getEventType() != cluster2.getEventType()) {
             throw new IllegalArgumentException("event clusters are not compatible: they have different types");
         }
@@ -112,6 +112,7 @@ public class EventCluster implements MultiEvent<EventStripe> {
                          EventStripe parent) {
 
         this.span = spanningInterval;
+
         this.type = type;
         this.hashHits = hashHits;
         this.tagged = tagged;
@@ -134,6 +135,7 @@ public class EventCluster implements MultiEvent<EventStripe> {
                 event.isTagged() ? singleton(event.getEventID()) : emptySet(),
                 event.getDescription(lod),
                 lod);
+
     }
 
     /**
@@ -213,6 +215,7 @@ public class EventCluster implements MultiEvent<EventStripe> {
      *         EventBundle as the parent.
      */
     public EventCluster withParent(EventStripe parent) {
+
         return new EventCluster(span, type, eventIDs, hashHits, tagged, description, lod, parent);
     }
 
