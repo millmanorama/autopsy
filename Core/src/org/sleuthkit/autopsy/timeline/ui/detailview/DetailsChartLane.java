@@ -26,8 +26,11 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -233,6 +236,24 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
     public double layoutEventBundleNodes(final Collection<? extends EventNodeBase<?>> nodes, final double minY) {
         // map from y-ranges to maximum x
         TreeRangeMap<Double, Double> maxXatY = TreeRangeMap.create();
+        // map from x-ranges to maximum y
+        TreeRangeMap<Double, Double> maxYatX = TreeRangeMap.create();
+
+        TreeSet<EventNodeBase<?>> nodesQueue = new TreeSet<>(Comparator.comparing(EventNodeBase::getStartMillis));
+        nodesQueue.addAll(nodes);
+        while (nodesQueue.isEmpty() == false) {
+            EventNodeBase<? extends DetailViewEvent> node = nodesQueue.first();
+            long startMillis = node.getStartMillis();
+            double x = getXForEpochMillis(startMillis) - node.getLayoutXCompensation();
+
+            //1 starting at x = 0,
+            //2   starting at y = 0
+            //3      get next event,
+            //4      lay it out.  if it fits remove it from queue, add to maps , set x = right 
+            //5              go to next event. (3)
+            //6       when done with groups, increment y to next row.
+            // 
+        }
 
         // maximum y values occupied by any of the given nodes,  updated as nodes are layed out.
         double localMax = minY;
