@@ -373,7 +373,7 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
     void animateTo(double xLeft, double yTop) {
         if (timeline != null) {
             timeline.stop();
-            Platform.runLater(this::requestChartLayout);
+         //   Platform.runLater(this::requestChartLayout);
         }
         timeline = new Timeline(new KeyFrame(Duration.millis(100),
                 new KeyValue(layoutXProperty(), xLeft),
