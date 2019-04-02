@@ -20,6 +20,7 @@ package org.sleuthkit.autopsy.timeline.ui.filtering.datamodel;
 
 import com.google.common.collect.Lists;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javafx.collections.ListChangeListener;
@@ -73,7 +74,9 @@ public class TagsFilterState extends CompoundFilterState<TagNameFilter, TagsFilt
                 .map(FilterState::getActiveFilter)
                 .collect(Collectors.toSet());
         TagsFilter copy = new TagsFilter();
-        activeSubFilters.forEach(copy::addSubFilter);
+        activeSubFilters.stream()
+                .sorted(Comparator.comparing(TagNameFilter::getTagName))
+                .forEach(copy::addSubFilter);
 
         return copy;
     }
