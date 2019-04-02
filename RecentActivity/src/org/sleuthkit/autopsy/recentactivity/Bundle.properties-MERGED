@@ -22,7 +22,7 @@ ExtractIE.getCookie.errMsg.errPostingCookies=Error posting Internet Explorer Coo
 ExtractIE.getCookie.errMsg.errPostingCookiess=Error posting Internet Explorer Cookie artifacts.
 ExtractIE.getHistory.errMsg.errPostingHistory=Error posting Internet Explorer History artifacts.
 ExtractIE.parentModuleName.noSpace=RecentActivity
-#{0} - the module name
+# {0} - the module name
 Extractor.errPostingArtifacts=Error posting {0} artifacts to the blackboard.
 ExtractOs.androidOs.label=Android
 ExtractOs.androidVolume.label=OS Drive (Android)
