@@ -90,7 +90,7 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         return new EventStripe(parent, this.type, this.description, this.lod, clusters, eventIDs, tagged, hashHits);
     }
 
-    private EventStripe(EventCluster parent, EventType type, String description,
+    private EventStripe(EventCluster parent, EventType type, String description,  
                         DescriptionLoD lod, SortedSet<EventCluster> clusters,
                         Set<Long> eventIDs, Set<Long> tagged, Set<Long> hashHits) {
         this.parent = parent;
@@ -107,6 +107,7 @@ public final class EventStripe implements MultiEvent<EventCluster> {
     public EventStripe(EventCluster cluster) {
         this.clusters = copyAsSortedSet(singleton(cluster.withParent(this)),
                 comparing(EventCluster::getStartMillis));
+              
               
         type = cluster.getEventType();
         description = cluster.getDescription();
