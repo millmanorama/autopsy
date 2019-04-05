@@ -19,9 +19,9 @@
 package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSortedSet;
 import java.util.Collections;
-import java.util.Comparator;
+import static java.util.Collections.singleton;
+import static java.util.Comparator.comparing;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -301,7 +301,7 @@ public class SingleDetailsViewEvent implements DetailViewEvent {
     @Override
     public SortedSet<EventCluster> getClusters() {
         EventCluster eventCluster = new EventCluster(new Interval(time * 1000, time * 1000), type, getEventIDs(), getEventIDsWithHashHits(), getEventIDsWithTags(), getFullDescription(), DescriptionLoD.FULL);
-        return ImmutableSortedSet.orderedBy(Comparator.comparing(EventCluster::getStartMillis)).add(eventCluster).build();
+        return DetailsViewModel.copyAsSortedSet(singleton(eventCluster), comparing(EventCluster::getStartMillis));
     }
 
     @Override

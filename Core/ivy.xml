@@ -1,5 +1,5 @@
 <ivy-module version="2.0">
-    <info organisation="org.sleuthkit.autopsy" module="emailparser"/>
+    <info organisation="org.sleuthkit.autopsy" module="Autopsy-Core"/>
     <configurations >
         <!-- module dependencies -->
         <conf name="core"/>
@@ -31,14 +31,18 @@
 
         <dependency conf="core->default" org="org.jsoup" name="jsoup" rev="1.10.3"/>
 		
-		<dependency conf="core->default" org="com.fasterxml.jackson.core" name="jackson-core" rev="2.9.7"/>
+        <dependency conf="core->default" org="com.fasterxml.jackson.core" name="jackson-core" rev="2.9.7"/>
          
         <dependency conf="core->default" org="commons-validator" name="commons-validator" rev="1.6"/>
         <dependency conf="core->default" org="net.htmlparser.jericho" name="jericho-html" rev="3.3"/>
         
+        
+        <dependency conf="core->default" org="com.github.davidmoten"  name="rtree" rev ="0.8.6"/>
+        
         <!-- Tika 1.14 seems to declare a (transitive?) dependency on cleartk-util 3.2.2, but the most recent
         version available is 2.0.0  Overriding the version worked-->
         <override  org="org.cleartk" module="cleartk-util" rev="2.0.0"/>
+        
         
     </dependencies>
 </ivy-module>

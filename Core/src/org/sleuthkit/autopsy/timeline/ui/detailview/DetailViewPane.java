@@ -371,17 +371,18 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
     }
 
     @NbBundle.Messages({
-        "DetailViewPane.loggedTask.queryDb=Retrieving event data",
-        "DetailViewPane.loggedTask.name=Updating Details View",
-        "DetailViewPane.loggedTask.updateUI=Populating view",
-        "DetailViewPane.loggedTask.continueButton=Continue",
-        "DetailViewPane.loggedTask.backButton=Back (Cancel)",
+        "DetailsUpdateTask.queryDb=Retrieving event data",
+        "DetailsUpdateTask.name=Updating Details View",
+        "DetailsUpdateTask.updateUI=Populating view",
+        "DetailsUpdateTask.continueButton=Continue",
+        "DetailsUpdateTask.backButton=Back (Cancel)",
         "# {0} - number of events",
-        "DetailViewPane.loggedTask.prompt=You are about to show details for {0} events.  This might be very slow and could exhaust available memory.\n\nDo you want to continue?"})
+        "DetailsUpdateTask.prompt=You are about to show details for {0} event clusters."
+                + "  This might be very slow and could exhaust available memory.\n\nDo you want to continue?"})
     private class DetailsUpdateTask extends ViewRefreshTask<Interval> {
 
         DetailsUpdateTask() {
-            super(Bundle.DetailViewPane_loggedTask_name(), true);
+            super(Bundle.DetailsUpdateTask_name(), true);
         }
 
         @Override
@@ -399,7 +400,7 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
                 return true;
             }
 
-            updateMessage(Bundle.DetailViewPane_loggedTask_queryDb());
+            updateMessage(Bundle.DetailsUpdateTask_queryDb());
 
             //get the event stripes to be displayed
             List<EventStripe> eventStripes = detailsViewModel.getEventStripes(newZoom);
@@ -409,10 +410,10 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
                 Task<ButtonType> task = new Task<ButtonType>() {
                     @Override
                     protected ButtonType call() throws Exception {
-                        ButtonType ContinueButtonType = new ButtonType(Bundle.DetailViewPane_loggedTask_continueButton(), ButtonBar.ButtonData.OK_DONE);
-                        ButtonType back = new ButtonType(Bundle.DetailViewPane_loggedTask_backButton(), ButtonBar.ButtonData.CANCEL_CLOSE);
+                        ButtonType ContinueButtonType = new ButtonType(Bundle.DetailsUpdateTask_continueButton(), ButtonBar.ButtonData.OK_DONE);
+                        ButtonType back = new ButtonType(Bundle.DetailsUpdateTask_backButton(), ButtonBar.ButtonData.CANCEL_CLOSE);
 
-                        Alert alert = new Alert(Alert.AlertType.WARNING, Bundle.DetailViewPane_loggedTask_prompt(size), ContinueButtonType, back);
+                        Alert alert = new Alert(Alert.AlertType.WARNING, Bundle.DetailsUpdateTask_prompt(size), ContinueButtonType, back);
                         alert.setHeaderText("");
                         alert.initModality(Modality.APPLICATION_MODAL);
                         alert.initOwner(getScene().getWindow());
@@ -436,7 +437,7 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             //clear the chart and set the horixontal axis
             resetView(eventsModel.getTimeRange());
 
-            updateMessage(Bundle.DetailViewPane_loggedTask_updateUI());
+            updateMessage(Bundle.DetailsUpdateTask_updateUI());
 
             //add all the stripes
             for (int i = 0; i < size; i++) {

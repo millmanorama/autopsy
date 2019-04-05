@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
@@ -133,7 +134,7 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
     final HBox infoHBox = new HBox(5, eventTypeImageView, hashIV, tagIV, descrLabel, countLabel, controlsHBox);
     final SleuthkitCase sleuthkitCase;
     final FilteredEventsModel eventsModel;
-    private Timeline timeline;
+    private Animation timeline;
     private Button pinButton;
     private final Border SELECTION_BORDER;
 
@@ -171,16 +172,19 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
         setOnMouseEntered(mouseEntered -> {
             Tooltip.uninstall(chartLane, AbstractTimelineChart.getDefaultTooltip());
             showHoverControls(true);
+//            requestChartLayout();
             toFront();
         });
 
         setOnMouseExited(mouseExited -> {
             showHoverControls(false);
+//            requestChartLayout();
             if (parentNode != null) {
                 parentNode.showHoverControls(true);
             } else {
                 Tooltip.install(chartLane, AbstractTimelineChart.getDefaultTooltip());
             }
+
         });
         setOnMouseClicked(new ClickHandler());
         show(controlsHBox, false);
@@ -372,11 +376,13 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
     abstract String getDescription();
 
     void animateTo(double xLeft, double yTop) {
+
         if (timeline != null) {
             timeline.stop();
          //   Platform.runLater(this::requestChartLayout);
         }
-        timeline = new Timeline(new KeyFrame(Duration.millis(100),
+
+        timeline = new Timeline(new KeyFrame(Duration.millis(200),
                 new KeyValue(layoutXProperty(), xLeft),
                 new KeyValue(layoutYProperty(), yTop))
         );
@@ -455,6 +461,7 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
     final public void clearContextMenu() {
     }
 
+    @Override
     public ContextMenu getContextMenu(MouseEvent mouseEvent) {
         ContextMenu chartContextMenu = chartLane.getContextMenu(mouseEvent);
 

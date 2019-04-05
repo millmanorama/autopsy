@@ -28,7 +28,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import static java.util.Comparator.comparing;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +41,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Interval;
 import org.joda.time.Period;
@@ -106,9 +108,8 @@ final public class DetailsViewModel {
     /**
      * @param zoom
      *
-     * @return a list of aggregated events that are within the requested time
-     *         range and pass the requested filter, using the given aggregation
-     *         to control the grouping of events
+     * @return a list of EventStripes that are within the requested time range
+     *         and pass the requested filter.
      *
      * @throws org.sleuthkit.datamodel.TskCoreException
      */
@@ -119,19 +120,20 @@ final public class DetailsViewModel {
         DescriptionLoD descriptionLOD = zoom.getDescriptionLOD();
         EventTypeZoomLevel typeZoomLevel = zoom.getTypeZoomLevel();
 
-        //intermediate results 
-        Map<EventType, SetMultimap< String, EventCluster>> eventClusters = new HashMap<>();
+        //map from type to (map from description to event cluster)
+        Map<EventType, SetMultimap< String, TimelineEvent>> events = new HashMap<>();
         try {
+            //cached results,  filtered by the UI filter.
             eventCache.get(zoom).stream()
                     .filter(uiFilter)
                     .forEach(event -> {
                         EventType clusterType = event.getEventType(typeZoomLevel);
-                        eventClusters.computeIfAbsent(clusterType, eventType -> HashMultimap.create())
-                                .put(event.getDescription(descriptionLOD), new EventCluster(event, clusterType, descriptionLOD));
+                        events.computeIfAbsent(clusterType, eventType -> HashMultimap.create())
+                                .put(event.getDescription(descriptionLOD), event);
                     });
             //get some info about the time range requested
             TimeUnits periodSize = RangeDivision.getRangeDivision(timeRange, timeZone).getPeriodSize();
-            return mergeClustersToStripes(periodSize.toUnitPeriod(), eventClusters);
+            return mergeEventsToStripes(periodSize.toUnitPeriod(), events, descriptionLOD);
 
         } catch (ExecutionException ex) {
             throw new TskCoreException("Failed to load Event Stripes from cache for " + zoom.toString(), ex); //NON-NLS
@@ -139,16 +141,14 @@ final public class DetailsViewModel {
     }
 
     /**
-     * Get a list of EventStripes, clustered according to the given zoom
-     * paramaters.
+     * Get a list of TimelineEvents, using the requested zoom paramaters.
      *
      * @param zoom     The ZoomState that determine the zooming, filtering and
      *                 clustering.
      * @param timeZone The time zone to use.
      *
-     * @return a list of aggregate events within the given timerange, that pass
-     *         the supplied filter, aggregated according to the given event type
-     *         and description zoom levels
+     * @return a list of events within the given timerange, that pass the
+     *         supplied filter.
      *
      * @throws org.sleuthkit.datamodel.TskCoreException If there is an error
      *                                                  querying the db.
@@ -193,15 +193,14 @@ final public class DetailsViewModel {
     }
 
     /**
-     * Map a single row in a ResultSet to an EventCluster
+     * Map a single row in a ResultSet to a TimelineEvent
      *
      * @param resultSet      the result set whose current row should be mapped
      * @param typeColumn     The type column (sub_type or base_type) to use as
-     *                       the type of the event cluster
+     *                       the type of the event
      * @param descriptionLOD the description level of detail for this event
-     *                       cluster
      *
-     * @return an EventCluster corresponding to the current row in the given
+     * @return an TimelineEvent corresponding to the current row in the given
      *         result set
      *
      * @throws SQLException
@@ -241,55 +240,58 @@ final public class DetailsViewModel {
      *
      * @return
      */
-    static private List<EventStripe> mergeClustersToStripes(Period timeUnitLength, Map<EventType, SetMultimap< String, EventCluster>> eventClusters) {
+    static private List<EventStripe> mergeEventsToStripes(Period timeUnitLength, Map<EventType, SetMultimap< String, TimelineEvent>> eventClusters, DescriptionLoD descrLoD) {
 
         //result list to return
         ArrayList<EventCluster> mergedClusters = new ArrayList<>();
 
         //For each (type, description) key, merge agg events
-        for (Map.Entry<EventType, SetMultimap<String, EventCluster>> typeMapEntry : eventClusters.entrySet()) {
+        for (Map.Entry<EventType, SetMultimap<String, TimelineEvent>> typeMapEntry : eventClusters.entrySet()) {
             EventType type = typeMapEntry.getKey();
-            SetMultimap<String, EventCluster> descrMap = typeMapEntry.getValue();
+            SetMultimap<String, TimelineEvent> descrMap = typeMapEntry.getValue();
             //for each description ...
             for (String descr : descrMap.keySet()) {
-                Set<EventCluster> events = descrMap.get(descr);
+                Set<TimelineEvent> events = descrMap.get(descr);
                 //run through the sorted events, merging together adjacent events
-                Iterator<EventCluster> iterator = events.stream()
-                        .sorted(new DetailViewEvent.StartComparator())
+                Iterator<TimelineEvent> iterator = events.stream()
+                        .sorted(comparing(TimelineEvent::getStartMillis))
                         .iterator();
-                EventCluster current = iterator.next();
+                TimelineEvent currentEvent = iterator.next();
+                EventCluster currentCluster = new EventCluster(currentEvent, type, descrLoD);
 
-                //JM Todo: maybe we can collect all clusters to merge in one go, rather than piece by piece for performance.
                 while (iterator.hasNext()) {
-                    EventCluster next = iterator.next();
-                    Interval gap = current.getSpan().gap(next.getSpan());
+                    TimelineEvent next = iterator.next();
+                    Interval eventSpan = new Interval(next.getStartMillis(), next.getEndMillis());
+                    Interval gap = currentCluster.getSpan().gap(eventSpan);
 
                     //if they overlap or gap is less one quarter timeUnitLength
                     //TODO: 1/4 factor is arbitrary. review! -jm
                     if (gap == null || gap.toDuration().getMillis() <= timeUnitLength.toDurationFrom(gap.getStart()).getMillis() / 4) {
                         //merge them
-                        current = EventCluster.merge(current, next);
+                        currentCluster = currentCluster.add(next, eventSpan);
                     } else {
                         //done merging into current, set next as new current
-                        mergedClusters.add(current);
-                        current = next;
+                        mergedClusters.add(currentCluster);
+                        currentCluster = new EventCluster(next, type, descrLoD);
                     }
                 }
-                mergedClusters.add(current);
+                mergedClusters.add(currentCluster);
             }
         }
 
         //merge clusters to stripes
-        Map<ImmutablePair<EventType, String>, EventStripe> stripeDescMap = new HashMap<>();
-
+        Map<Pair<EventType, String>, EventStripe> stripeDescMap = new HashMap<>();
         for (EventCluster eventCluster : mergedClusters) {
-            stripeDescMap.merge(ImmutablePair.of(eventCluster.getEventType(), eventCluster.getDescription()),
-                    new EventStripe(eventCluster), EventStripe::merge);
+            stripeDescMap.merge(getTypeDescriptionPair(eventCluster), new EventStripe(eventCluster), EventStripe::merge);
         }
 
         return stripeDescMap.values().stream()
-                .sorted(new DetailViewEvent.StartComparator())
+                .sorted(comparing(EventStripe::getStartMillis))
                 .collect(Collectors.toList());
+    }
+
+    private static Pair<EventType, String> getTypeDescriptionPair(EventCluster eventCluster) {
+        return Pair.of(eventCluster.getEventType(), eventCluster.getDescription());
     }
 
     /** Make a sorted copy of the given set using the given comparator to sort
@@ -305,5 +307,11 @@ final public class DetailsViewModel {
         TreeSet<X> treeSet = new TreeSet<>(comparator);
         treeSet.addAll(setA);
         return treeSet;
+    }
+
+    static <X> Set<X> union(Set<X> setA, Set<X> setB) {
+        Set<X> s = new HashSet<>(setA);
+        s.addAll(setB);
+        return s;
     }
 }

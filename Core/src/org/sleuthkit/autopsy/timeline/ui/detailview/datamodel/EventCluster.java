@@ -18,7 +18,7 @@
  */
 package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
-import static java.util.Collections.emptySet;
+import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Collections.singleton;
 import java.util.Comparator;
 import java.util.Objects;
@@ -81,30 +81,34 @@ public class EventCluster implements MultiEvent<EventStripe> {
      * merge two event clusters into one new event cluster.
      *
      * @param cluster1
-     * @param cluster2
+     * @param event
      *
      * @return a new event cluster that is the result of merging the given
      *         events clusters
      */
-    public static EventCluster merge(EventCluster cluster1, EventCluster cluster2) {
+    EventCluster add(TimelineEvent event, Interval eventSpan) {
 
-        if (cluster1.getEventType() != cluster2.getEventType()) {
+        if (getEventType() != event.getEventType()) {
             throw new IllegalArgumentException("event clusters are not compatible: they have different types");
         }
 
-        if (!cluster1.getDescription().equals(cluster2.getDescription())) {
+        if (!getDescription().equals(event.getDescription(getDescriptionLoD()))) {
             throw new IllegalArgumentException("event clusters are not compatible: they have different descriptions");
         }
 
-        Interval spanningInterval = IntervalUtils.span(cluster1.span, cluster2.span);
+        Interval spanningInterval = IntervalUtils.span(span, eventSpan);
 
-        Set<Long> idsUnion = Sets.union(cluster1.getEventIDs(), cluster2.getEventIDs());
-        Set<Long> hashHitsUnion = Sets.union(cluster1.getEventIDsWithHashHits(), cluster2.getEventIDsWithHashHits());
-        Set<Long> taggedUnion = Sets.union(cluster1.getEventIDsWithTags(), cluster2.getEventIDsWithTags());
+        getEventIDs().add(event.getEventID());
+        if (event.isHashHit()) {
+            getEventIDsWithHashHits().add(event.getEventID());
+        }
+        if (event.isTagged()) {
+            getEventIDsWithTags().add(event.getEventID());
+        }
 
         return new EventCluster(spanningInterval,
-                cluster1.getEventType(), idsUnion, hashHitsUnion, taggedUnion,
-                cluster1.getDescription(), cluster1.lod);
+                getEventType(), getEventIDs(), getEventIDsWithHashHits(), getEventIDsWithTags(),
+                getDescription(), lod);
     }
 
     private EventCluster(Interval spanningInterval, EventType type, Set<Long> eventIDs,
@@ -130,9 +134,9 @@ public class EventCluster implements MultiEvent<EventStripe> {
     public EventCluster(TimelineEvent event, EventType type, DescriptionLoD lod) {
         this(new Interval(event.getStartMillis(), event.getEndMillis()),
                 type,
-                singleton(event.getEventID()),
-                event.isHashHit() ? singleton(event.getEventID()) : emptySet(),
-                event.isTagged() ? singleton(event.getEventID()) : emptySet(),
+                newHashSet(event.getEventID()),
+                event.isHashHit() ? newHashSet(event.getEventID()) : newHashSet(),
+                event.isTagged() ? newHashSet(event.getEventID()) : newHashSet(),
                 event.getDescription(lod),
                 lod);
 

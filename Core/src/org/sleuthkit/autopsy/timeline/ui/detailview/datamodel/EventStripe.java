@@ -19,7 +19,7 @@
 package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Sets;
+import static java.util.Collections.singleton;
 import static java.util.Comparator.comparing;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,8 +29,8 @@ import org.sleuthkit.datamodel.DescriptionLoD;
 import org.sleuthkit.datamodel.timeline.EventType;
 
 /**
- * A 'collection' of {@link EventCluster}s, all having the same type,
- * description, and zoom levels, but not necessarily close together in time.
+ * A 'collection' of EventClusters, all having the same type, description, and
+ * zoom levels, but not necessarily close together in time.
  */
 public final class EventStripe implements MultiEvent<EventCluster> {
 
@@ -69,14 +69,22 @@ public final class EventStripe implements MultiEvent<EventCluster> {
      */
     private final Set<Long> hashHits;
 
-    public static EventStripe merge(EventStripe stripeA, EventStripe stripeB) {
-        Preconditions.checkNotNull(stripeA);
+    EventStripe merge(EventStripe stripeB) {
+
         Preconditions.checkNotNull(stripeB);
-        Preconditions.checkArgument(Objects.equals(stripeA.description, stripeB.description));
-        Preconditions.checkArgument(Objects.equals(stripeA.lod, stripeB.lod));
-        Preconditions.checkArgument(Objects.equals(stripeA.type, stripeB.type));
-        Preconditions.checkArgument(Objects.equals(stripeA.parent, stripeB.parent));
-        return new EventStripe(stripeA, stripeB);
+        Preconditions.checkArgument(Objects.equals(description, stripeB.description));
+        Preconditions.checkArgument(Objects.equals(lod, stripeB.lod));
+        Preconditions.checkArgument(Objects.equals(type, stripeB.type));
+        Preconditions.checkArgument(Objects.equals(parent, stripeB.parent));
+
+        getClusters().addAll(stripeB.getClusters());
+        getEventIDs().addAll(stripeB.getEventIDs());
+        getEventIDsWithTags().addAll(stripeB.getEventIDsWithTags());
+        getEventIDsWithHashHits().addAll(stripeB.getEventIDsWithHashHits());
+        EventCluster mergedparent = getParent().orElse(stripeB.getParent().orElse(null));
+
+        return new EventStripe(mergedparent, getEventType(), getDescription(), getDescriptionLoD(), getClusters(), getEventIDs(),
+                getEventIDsWithTags(), getEventIDsWithHashHits());
     }
 
     public EventStripe withParent(EventCluster parent) {
@@ -86,7 +94,7 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         return new EventStripe(parent, this.type, this.description, this.lod, clusters, eventIDs, tagged, hashHits);
     }
 
-    private EventStripe(EventCluster parent, EventType type, String description, 
+    private EventStripe(EventCluster parent, EventType type, String description,
                         DescriptionLoD lod, SortedSet<EventCluster> clusters,
                         Set<Long> eventIDs, Set<Long> tagged, Set<Long> hashHits) {
         this.parent = parent;
@@ -111,21 +119,6 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         tagged = cluster.getEventIDsWithTags();
         hashHits = cluster.getEventIDsWithHashHits();
         this.parent = null;
-    }
-
-    private EventStripe(EventStripe stripeA, EventStripe stripeB) {
-    
-
-        clusters = DetailsViewModel.copyAsSortedSet(Sets.union(stripeA.getClusters(), stripeB.getClusters()),
-         comparing(EventCluster::getStartMillis));
-        
-        type = stripeA.getEventType();
-        description = stripeA.getDescription();
-        lod = stripeA.getDescriptionLoD();
-        eventIDs = Sets.union(stripeA.getEventIDs(), stripeB.getEventIDs());
-        tagged = Sets.union(stripeA.getEventIDsWithTags(), stripeB.getEventIDsWithTags());
-        hashHits = Sets.union(stripeA.getEventIDsWithHashHits(), stripeB.getEventIDsWithHashHits());
-        parent = stripeA.getParent().orElse(stripeB.getParent().orElse(null));
     }
 
     @Override

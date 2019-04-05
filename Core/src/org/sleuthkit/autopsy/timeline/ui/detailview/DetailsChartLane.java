@@ -18,23 +18,25 @@
  */
 package org.sleuthkit.autopsy.timeline.ui.detailview;
 
+import com.github.davidmoten.rtree.Entry;
+import com.github.davidmoten.rtree.RTree;
+import com.github.davidmoten.rtree.geometry.Rectangle;
+import com.github.davidmoten.rtree.geometry.internal.RectangleDouble;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Range;
-import com.google.common.collect.TreeRangeMap;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.property.ReadOnlyDoubleProperty;
@@ -52,6 +54,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseEvent;
 import static javafx.scene.layout.Region.USE_PREF_SIZE;
 import org.joda.time.DateTime;
+import org.openide.util.Exceptions;
 import org.sleuthkit.autopsy.coreutils.ThreadConfined;
 import org.sleuthkit.autopsy.timeline.TimeLineController;
 import org.sleuthkit.autopsy.timeline.ui.AbstractTimelineChart;
@@ -63,6 +66,8 @@ import org.sleuthkit.autopsy.timeline.ui.detailview.datamodel.SingleDetailsViewE
 import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.DescriptionFilter;
 import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.FilterState;
 import org.sleuthkit.datamodel.TskCoreException;
+import rx.Observable;
+import rx.functions.Func1;
 
 /**
  * One "lane" of a the details view, contains all the core logic and layout
@@ -138,7 +143,6 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
                     .map(DescriptionFilter::getDescription)
                     .collect(Collectors.toSet());
         }
-        //This dosn't change during a layout pass and is expensive to compute per node.  So we do it once at the start
         descriptionWidth = layoutSettings.getTruncateAll() ? layoutSettings.getTruncateWidth() : USE_PREF_SIZE;
 
         if (layoutSettings.getBandByType()) {
@@ -234,29 +238,8 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
      * @return the maximum y coordinate used by any of the layed out nodes.
      */
     public double layoutEventBundleNodes(final Collection<? extends EventNodeBase<?>> nodes, final double minY) {
-        // map from y-ranges to maximum x
-        TreeRangeMap<Double, Double> maxXatY = TreeRangeMap.create();
-        // map from x-ranges to maximum y
-        TreeRangeMap<Double, Double> maxYatX = TreeRangeMap.create();
-
-        TreeSet<EventNodeBase<?>> nodesQueue = new TreeSet<>(Comparator.comparing(EventNodeBase::getStartMillis));
-        nodesQueue.addAll(nodes);
-        while (nodesQueue.isEmpty() == false) {
-            EventNodeBase<? extends DetailViewEvent> node = nodesQueue.first();
-            long startMillis = node.getStartMillis();
-            double x = getXForEpochMillis(startMillis) - node.getLayoutXCompensation();
-
-            //1 starting at x = 0,
-            //2   starting at y = 0
-            //3      get next event,
-            //4      lay it out.  if it fits remove it from queue, add to maps , set x = right 
-            //5              go to next event. (3)
-            //6       when done with groups, increment y to next row.
-            // 
-        }
-
-        // maximum y values occupied by any of the given nodes,  updated as nodes are layed out.
         double localMax = minY;
+        RTree<String, Rectangle> tree = RTree.create();
 
         //for each node do a recursive layout to size it and then position it in first available slot
         for (EventNodeBase<?> bundleNode : nodes) {
@@ -276,9 +259,11 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
                 //initial test position
                 double yTop = (layoutSettings.getOneEventPerRow())
                         ? (localMax + MINIMUM_EVENT_NODE_GAP)// if onePerRow, just put it at end
-                        : computeYTop(minY, h, maxXatY, xLeft, xRight);
+                        : computeYTop(minY, h, tree, xLeft, xRight);
+                double yBottom = yTop + h;
 
-                localMax = Math.max(yTop + h, localMax);
+                tree = tree.add(bundleNode.getDescription(), RectangleDouble.create(xLeft, yTop, xRight, yBottom));
+                localMax = Math.max(yBottom, localMax);
 
                 //animate node to new position
                 bundleNode.animateTo(xLeft, yTop);
@@ -405,27 +390,29 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
      *
      * @return the y position for the node in question.
      */
-    double computeYTop(double yMin, double h, TreeRangeMap<Double, Double> maxXatY, double xLeft, double xRight) {
+    double computeYTop(double yMin, double h, RTree<String, Rectangle> tree, double xLeft, double xRight) {
         double yTop = yMin;
-        double yBottom = yTop + h;
+
         //until the node is not overlapping any others try moving it down.
         boolean overlapping = true;
-        while (overlapping) {
-            overlapping = false;
-            //check each pixel from bottom to top.
-            for (double y = yBottom; y >= yTop; y -= MINIMUM_ROW_HEIGHT) {
-                final Double maxX = maxXatY.get(y);
-                if (maxX != null && maxX >= xLeft - MINIMUM_EVENT_NODE_GAP) {
-                    //if that pixel is already used
-                    //jump top to this y value and repeat until free slot is found.
-                    overlapping = true;
-                    yTop = y + MINIMUM_EVENT_NODE_GAP;
-                    yBottom = yTop + h;
-                    break;
-                }
+
+        do {
+            double yBottom = yTop + h;
+
+            RectangleDouble nodeRect = RectangleDouble.create(xLeft, yTop, xRight, yBottom);
+            Observable<Entry<String, Rectangle>> search = tree.search(nodeRect, MINIMUM_EVENT_NODE_GAP);
+
+            double maxIntersectY = -1;
+            for (Entry<String, Rectangle> r : search.toBlocking().toIterable()) {
+                maxIntersectY = Math.max(maxIntersectY, r.geometry().y2());
             }
-        }
-        maxXatY.put(Range.closed(yTop, yBottom), xRight);
+
+            if (maxIntersectY >= 0) {
+                yTop = maxIntersectY + MINIMUM_EVENT_NODE_GAP;
+            } else {
+                overlapping = false;
+            }
+        } while (overlapping);
         return yTop;
     }
 

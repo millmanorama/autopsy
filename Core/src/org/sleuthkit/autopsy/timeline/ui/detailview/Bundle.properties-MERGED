@@ -1,15 +1,15 @@
 CollapseClusterAction.text=Collapse
+DetailsUpdateTask.backButton=Back (Cancel)
+DetailsUpdateTask.continueButton=Continue
+DetailsUpdateTask.name=Updating Details View
+# {0} - number of events
+DetailsUpdateTask.prompt=You are about to show details for {0} event clusters.  This might be very slow and could exhaust available memory.\n\nDo you want to continue?
+DetailsUpdateTask.queryDb=Retrieving event data
+DetailsUpdateTask.updateUI=Populating view
 DetailViewPane.advancedLayoutOptionsButtonLabel.text=Advanced Layout Options
 DetailViewPane.bandByTypeBox.text=Band by Type
 DetailViewPane.countsRadio.text=Show Counts Only
 DetailViewPane.hiddenRadio.text=Hide Description
-DetailViewPane.loggedTask.backButton=Back (Cancel)
-DetailViewPane.loggedTask.continueButton=Continue
-DetailViewPane.loggedTask.name=Updating Details View
-# {0} - number of events
-DetailViewPane.loggedTask.prompt=You are about to show details for {0} events.  This might be very slow and could exhaust available memory.\n\nDo you want to continue?
-DetailViewPane.loggedTask.queryDb=Retrieving event data
-DetailViewPane.loggedTask.updateUI=Populating view
 DetailViewPane.oneEventPerRowBox.text=One Per Row
 DetailViewPane.pinnedLaneLabel.text=Pinned Events
 DetailViewPane.primaryLaneLabel.text=All Events (Filtered)
