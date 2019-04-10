@@ -21,6 +21,8 @@ package org.sleuthkit.autopsy.timeline.ui.detailview;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -28,6 +30,8 @@ import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
+import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -49,6 +53,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.controlsfx.control.action.Action;
 import org.joda.time.DateTime;
 import org.joda.time.Interval;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.sleuthkit.autopsy.coreutils.Logger;
 import org.sleuthkit.autopsy.coreutils.ThreadConfined;
@@ -60,6 +65,7 @@ import org.sleuthkit.autopsy.timeline.ui.AbstractTimelineChart;
 import org.sleuthkit.autopsy.timeline.ui.detailview.datamodel.DetailViewEvent;
 import org.sleuthkit.autopsy.timeline.ui.detailview.datamodel.DetailsViewModel;
 import org.sleuthkit.autopsy.timeline.ui.detailview.datamodel.EventStripe;
+import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.UIFilter;
 import org.sleuthkit.autopsy.timeline.utils.MappedList;
 import org.sleuthkit.autopsy.timeline.zooming.ZoomState;
 import org.sleuthkit.datamodel.DescriptionLoD;
@@ -82,6 +88,11 @@ import org.sleuthkit.datamodel.TskCoreException;
 final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventStripe, EventNodeBase<?>, DetailsChart> {
 
     private final static Logger logger = Logger.getLogger(DetailViewPane.class.getName());
+
+    @NbBundle.Messages("DetailsUpdateTask.continueButton=Continue")
+    private final static ButtonType ContinueButtonType = new ButtonType(Bundle.DetailsUpdateTask_continueButton(), ButtonBar.ButtonData.OK_DONE);
+    @NbBundle.Messages("DetailsUpdateTask.backButton=Back (Cancel)")
+    private final static ButtonType back = new ButtonType(Bundle.DetailsUpdateTask_backButton(), ButtonBar.ButtonData.CANCEL_CLOSE);
 
     private final DateAxis detailsChartDateAxis = new DateAxis();
     private final DateAxis pinnedDateAxis = new DateAxis();
@@ -374,11 +385,9 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
         "DetailsUpdateTask.queryDb=Retrieving event data",
         "DetailsUpdateTask.name=Updating Details View",
         "DetailsUpdateTask.updateUI=Populating view",
-        "DetailsUpdateTask.continueButton=Continue",
-        "DetailsUpdateTask.backButton=Back (Cancel)",
         "# {0} - number of events",
         "DetailsUpdateTask.prompt=You are about to show details for {0} event clusters."
-                + "  This might be very slow and could exhaust available memory.\n\nDo you want to continue?"})
+        + "  This might be very slow and could exhaust available memory.\n\nDo you want to continue?"})
     private class DetailsUpdateTask extends ViewRefreshTask<Interval> {
 
         DetailsUpdateTask() {
@@ -392,27 +401,67 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             if (isCancelled()) {
                 return null;
             }
-            FilteredEventsModel eventsModel = getEventsModel();
-            ZoomState newZoom = eventsModel.getZoomState();
+            ZoomState newZoom = getEventsModel().getZoomState();
 
             //If the view doesn't need refreshing or if the ZoomState hasn't actually changed, just bail
             if (needsRefresh() == false && Objects.equals(currentZoom, newZoom)) {
                 return true;
             }
-
             updateMessage(Bundle.DetailsUpdateTask_queryDb());
 
-            //get the event stripes to be displayed
-            List<EventStripe> eventStripes = detailsViewModel.getEventStripes(newZoom);
-            final int size = eventStripes.size();
-            //if there are too many stipes show a confirmation dialog
-            if (size > 2000) {
-                Task<ButtonType> task = new Task<ButtonType>() {
-                    @Override
-                    protected ButtonType call() throws Exception {
-                        ButtonType ContinueButtonType = new ButtonType(Bundle.DetailsUpdateTask_continueButton(), ButtonBar.ButtonData.OK_DONE);
-                        ButtonType back = new ButtonType(Bundle.DetailsUpdateTask_backButton(), ButtonBar.ButtonData.CANCEL_CLOSE);
+            ObservableList<EventStripe> resultStripes = FXCollections.observableArrayList();
 
+//            //listen as stripes are populated and forward to the actual chart
+//            resultStripes.addListener(new ListChangeListener<EventStripe>() {
+//                boolean dismissed = false;
+//
+//                @Override
+//                public void onChanged(ListChangeListener.Change<? extends EventStripe> c) {
+//                    if (isCancelled()) {
+//                        return;
+//                    }
+//                    final int size = resultStripes.size();
+//                    if (dismissed == false && size > 2000) {
+//                        promptToCancel(size);
+//                        dismissed = true;
+//                    }
+//
+//                    while (c.next()) {
+//                        if (isCancelled()) {
+//                            return;
+//                        }
+//                        c.getAddedSubList().forEach(stripe -> Platform.runLater(() -> getChart().addStripe(stripe)));
+//                    }
+//                }
+//            });
+//            resetView(getEventsModel().getTimeRange()); //clear the chart and set the horixontal axis
+            //get the event stripes to be displayed
+            detailsViewModel.getEventStripes(UIFilter.getAllPassFilter(), newZoom, resultStripes, DetailsUpdateTask.this);
+            final int size = resultStripes.size();
+            if (size > 2000) {
+                promptToCancel(size);
+
+            }
+            if (isCancelled()) {
+                return null;
+            }
+            //we made it through the whole process, we are going to accept the new zoom
+            currentZoom = newZoom;
+            Platform.runLater(() -> {
+                getChart().getRootEventStripes().retainAll(resultStripes);
+                resultStripes.forEach(getChart()::addStripe);
+                getChart().getRootEventStripes().retainAll(resultStripes);
+                setDateValues(getEventsModel().getTimeRange());
+            });
+            updateMessage(Bundle.DetailsUpdateTask_updateUI());
+            return resultStripes.isEmpty() == false;
+        }
+
+        private void promptToCancel(final int size) {
+            Task<ButtonType> task = new Task<ButtonType>() {
+                @Override
+                protected ButtonType call() throws Exception {
+                    if (getScene() != null && getScene().getWindow() != null) {
                         Alert alert = new Alert(Alert.AlertType.WARNING, Bundle.DetailsUpdateTask_prompt(size), ContinueButtonType, back);
                         alert.setHeaderText("");
                         alert.initModality(Modality.APPLICATION_MODAL);
@@ -422,40 +471,20 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
                             DetailsUpdateTask.this.cancel();
                         }
                         return userResponse;
+                    } else {
+                        DetailsUpdateTask.this.cancel();
+                        return back;
                     }
-                };
-                //show dialog on JFX thread and block this thread until the dialog is dismissed.
-                Platform.runLater(task);
-                task.get();
-            }
-            if (isCancelled()) {
-                return null;
-            }
-            //we are going to accept the new zoom
-            currentZoom = newZoom;
-
-            //clear the chart and set the horixontal axis
-            resetView(eventsModel.getTimeRange());
-
-            updateMessage(Bundle.DetailsUpdateTask_updateUI());
-
-            //add all the stripes
-            for (int i = 0; i < size; i++) {
-                if (isCancelled()) {
-                    return null;
                 }
-                updateProgress(i, size);
-                final EventStripe stripe = eventStripes.get(i);
-                Platform.runLater(() -> getChart().addStripe(stripe));
-            }
-
-            return eventStripes.isEmpty() == false;
+            };
+            //show dialog on JFX thread and block this thread until the dialog is dismissed.
+            Platform.runLater(task);
         }
 
         @Override
         protected void cancelled() {
             super.cancelled();
-            getController().retreat();
+            Platform.runLater(getController()::retreat);
         }
 
         @Override

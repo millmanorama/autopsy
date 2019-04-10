@@ -20,11 +20,11 @@ package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.SetMultimap;
+import com.google.common.collect.TreeMultimap;
 import com.google.common.eventbus.Subscribe;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -39,12 +39,16 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.logging.Level;
-import java.util.stream.Collectors;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
+import javafx.concurrent.Task;
 import org.apache.commons.lang3.tuple.Pair;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Interval;
 import org.joda.time.Period;
+import org.openide.util.Exceptions;
 import org.sleuthkit.autopsy.coreutils.Logger;
 import org.sleuthkit.autopsy.timeline.FilteredEventsModel;
 import org.sleuthkit.autopsy.timeline.TimeLineController;
@@ -82,8 +86,7 @@ final public class DetailsViewModel {
         eventCache = CacheBuilder.newBuilder()
                 .maximumSize(1000L)
                 .expireAfterAccess(10, TimeUnit.MINUTES)
-                .build(new CacheLoaderImpl<>(params
-                        -> getEvents(params, TimeLineController.getJodaTimeZone())));
+                .build(new CacheLoaderImpl<>(this::getEventsHelper));
         eventsModel.registerForEvents(this);
     }
 
@@ -102,41 +105,116 @@ final public class DetailsViewModel {
      * @throws org.sleuthkit.datamodel.TskCoreException
      */
     public List<EventStripe> getEventStripes(ZoomState zoom) throws TskCoreException {
-        return getEventStripes(UIFilter.getAllPassFilter(), zoom);
+        return getEventStripes(UIFilter.getAllPassFilter(), zoom, new ArrayList<>(), null);
+    }
+
+    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom) throws TskCoreException {
+        return getEventStripes(uiFilter, zoom, new ArrayList<>(), null);
     }
 
     /**
-     * @param zoom
+     * @param uiFilter      Filtere specific to the details view.
+     * @param zoom          The zoom state to use to get and cluster the events.
+     * @param resultStripes Add event stripes to this list.
+     * @param cancelation   A task that can be used to cancel this process.
      *
      * @return a list of EventStripes that are within the requested time range
-     *         and pass the requested filter.
+     *         and pass the requested filter. This will be the same list and
+     *         resultStripes.
      *
      * @throws org.sleuthkit.datamodel.TskCoreException
      */
-    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom) throws TskCoreException {
-        DateTimeZone timeZone = TimeLineController.getJodaTimeZone();
+    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom, List<EventStripe> resultStripes, Task<?> cancelation) throws TskCoreException {
         //unpack params
         Interval timeRange = zoom.getTimeRange();
         DescriptionLoD descriptionLOD = zoom.getDescriptionLOD();
         EventTypeZoomLevel typeZoomLevel = zoom.getTypeZoomLevel();
 
-        //map from type to (map from description to event cluster)
-        Map<EventType, SetMultimap< String, TimelineEvent>> events = new HashMap<>();
-        try {
-            //cached results,  filtered by the UI filter.
-            eventCache.get(zoom).stream()
-                    .filter(uiFilter)
-                    .forEach(event -> {
-                        EventType clusterType = event.getEventType(typeZoomLevel);
-                        events.computeIfAbsent(clusterType, eventType -> HashMultimap.create())
-                                .put(event.getDescription(descriptionLOD), event);
-                    });
-            //get some info about the time range requested
-            TimeUnits periodSize = RangeDivision.getRangeDivision(timeRange, timeZone).getPeriodSize();
-            return mergeEventsToStripes(periodSize.toUnitPeriod(), events, descriptionLOD);
+        //get the allowed cluster gap based on the time range in view.
+        Long unitPeriod = timeRange.toDurationMillis() / 25;
 
+        //creat a map from eventType and String to events, keeping the events in chronological order.
+        TreeMultimap<Pair<EventType, String>, TimelineEvent> stripeMap = TreeMultimap.create(
+                Comparator.naturalOrder(),
+                comparing(TimelineEvent::getStartMillis));
+
+        //filter (cached) events by uiFilter and add them to stripeMap
+        for (TimelineEvent event : getCachedEvents(zoom)) {
+            if (cancelation != null && cancelation.isCancelled()) {
+                return resultStripes;
+            }
+
+            if (uiFilter.test(event)) {
+                Pair<EventType, String> stripeKey = Pair.of(event.getEventType(typeZoomLevel), event.getDescription(descriptionLOD));
+                stripeMap.put(stripeKey, event);
+            }
+        }
+
+        //sort map keys by start time.
+        List<Pair<EventType, String>> eventKeys = stripeMap.keySet().stream()
+                .sorted(comparing(key -> stripeMap.get(key).first().getStartMillis()))
+                .collect(toList());
+
+        //for each key, make a stripe, including internal clusters.
+        for (Pair<EventType, String> key : eventKeys) {
+            if (cancelation != null && cancelation.isCancelled()) {
+                return resultStripes;
+            }
+
+            //unpack keys 
+            EventType zoomedType = key.getLeft();
+            String description = key.getRight();
+
+            SortedSet<EventCluster> clusters = new TreeSet<>(comparing(EventCluster::getStartMillis));
+
+            Iterator<TimelineEvent> sortedEventIterator = stripeMap.get(key).iterator();
+            TimelineEvent currentEvent = sortedEventIterator.next();
+            EventCluster currentCluster = new EventCluster(currentEvent, zoomedType, descriptionLOD);
+            while (sortedEventIterator.hasNext()) {
+                if (cancelation != null && cancelation.isCancelled()) {
+                    return resultStripes;
+                }
+                TimelineEvent next = sortedEventIterator.next();
+                Interval nextEventSpan = new Interval(next.getStartMillis(), next.getEndMillis());
+
+                //if they overlap or gap is small, merge them
+                if (isOverlap(currentCluster.getSpan(), nextEventSpan, unitPeriod)) { //merge them
+                    currentCluster = currentCluster.add(next, nextEventSpan, zoomedType);
+                } else { //done merging into current, set next as new current
+                    clusters.add(currentCluster);
+                    currentCluster = new EventCluster(next, zoomedType, descriptionLOD);
+                }
+            }
+            clusters.add(currentCluster); //add last cluster
+            resultStripes.add(new EventStripe(zoomedType, description, descriptionLOD, clusters));
+        }
+
+        return resultStripes;
+    }
+
+    /**
+     * Do the given spans overalap or have a gap less one quarter
+     * timeUnitLength?
+     *
+     * //TODO: 1/4 factor is arbitrary review! -jm
+     *
+     * @param clusterSpan
+     * @param eventSpan
+     * @param unitPeriod
+     *
+     * @return
+     */
+    private static boolean isOverlap(Interval clusterSpan, Interval eventSpan, Long unitPeriod) {
+        Interval gap = clusterSpan.gap(eventSpan);
+        return gap == null || gap.toDurationMillis() <= unitPeriod;
+    }
+
+    private List<TimelineEvent> getCachedEvents(ZoomState zoom) throws TskCoreException {
+        //get (cached) events based on zoom
+        try {
+            return eventCache.get(zoom);
         } catch (ExecutionException ex) {
-            throw new TskCoreException("Failed to load Event Stripes from cache for " + zoom.toString(), ex); //NON-NLS
+            throw new TskCoreException("Failed to load events from cache for " + zoom.toString(), ex); //NON-NLS
         }
     }
 
@@ -153,7 +231,7 @@ final public class DetailsViewModel {
      * @throws org.sleuthkit.datamodel.TskCoreException If there is an error
      *                                                  querying the db.
      */
-    List<TimelineEvent> getEvents(ZoomState zoom, DateTimeZone timeZone) throws TskCoreException {
+    List<TimelineEvent> getEventsHelper(ZoomState zoom) throws TskCoreException {
         //unpack params
         Interval timeRange = zoom.getTimeRange();
         TimelineFilter.RootFilter activeFilter = zoom.getFilterState().getActiveFilter();
@@ -227,69 +305,6 @@ final public class DetailsViewModel {
 
     }
 
-    /**
-     * Merge the events in the given list if they are within the same period
-     * General algorithm is as follows:
-     *
-     * 1) sort them into a map from (type, description)-> List<EventCluster>
-     * 2) for each key in map, merge the events and accumulate them in a list to
-     * return
-     *
-     * @param timeUnitLength
-     * @param eventClusters
-     *
-     * @return
-     */
-    static private List<EventStripe> mergeEventsToStripes(Period timeUnitLength, Map<EventType, SetMultimap< String, TimelineEvent>> eventClusters, DescriptionLoD descrLoD) {
-
-        //result list to return
-        ArrayList<EventCluster> mergedClusters = new ArrayList<>();
-
-        //For each (type, description) key, merge agg events
-        for (Map.Entry<EventType, SetMultimap<String, TimelineEvent>> typeMapEntry : eventClusters.entrySet()) {
-            EventType type = typeMapEntry.getKey();
-            SetMultimap<String, TimelineEvent> descrMap = typeMapEntry.getValue();
-            //for each description ...
-            for (String descr : descrMap.keySet()) {
-                Set<TimelineEvent> events = descrMap.get(descr);
-                //run through the sorted events, merging together adjacent events
-                Iterator<TimelineEvent> iterator = events.stream()
-                        .sorted(comparing(TimelineEvent::getStartMillis))
-                        .iterator();
-                TimelineEvent currentEvent = iterator.next();
-                EventCluster currentCluster = new EventCluster(currentEvent, type, descrLoD);
-
-                while (iterator.hasNext()) {
-                    TimelineEvent next = iterator.next();
-                    Interval eventSpan = new Interval(next.getStartMillis(), next.getEndMillis());
-                    Interval gap = currentCluster.getSpan().gap(eventSpan);
-
-                    //if they overlap or gap is less one quarter timeUnitLength
-                    //TODO: 1/4 factor is arbitrary. review! -jm
-                    if (gap == null || gap.toDuration().getMillis() <= timeUnitLength.toDurationFrom(gap.getStart()).getMillis() / 4) {
-                        //merge them
-                        currentCluster = currentCluster.add(next, eventSpan);
-                    } else {
-                        //done merging into current, set next as new current
-                        mergedClusters.add(currentCluster);
-                        currentCluster = new EventCluster(next, type, descrLoD);
-                    }
-                }
-                mergedClusters.add(currentCluster);
-            }
-        }
-
-        //merge clusters to stripes
-        Map<Pair<EventType, String>, EventStripe> stripeDescMap = new HashMap<>();
-        for (EventCluster eventCluster : mergedClusters) {
-            stripeDescMap.merge(getTypeDescriptionPair(eventCluster), new EventStripe(eventCluster), EventStripe::merge);
-        }
-
-        return stripeDescMap.values().stream()
-                .sorted(comparing(EventStripe::getStartMillis))
-                .collect(Collectors.toList());
-    }
-
     private static Pair<EventType, String> getTypeDescriptionPair(EventCluster eventCluster) {
         return Pair.of(eventCluster.getEventType(), eventCluster.getDescription());
     }
@@ -314,4 +329,5 @@ final public class DetailsViewModel {
         s.addAll(setB);
         return s;
     }
+
 }

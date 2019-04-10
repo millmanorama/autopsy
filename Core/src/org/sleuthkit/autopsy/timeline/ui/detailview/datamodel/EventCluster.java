@@ -18,6 +18,7 @@
  */
 package org.sleuthkit.autopsy.timeline.ui.detailview.datamodel;
 
+import com.google.common.base.Preconditions;
 import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Collections.singleton;
 import java.util.Comparator;
@@ -29,6 +30,7 @@ import org.joda.time.Interval;
 import org.sleuthkit.autopsy.timeline.utils.IntervalUtils;
 import org.sleuthkit.datamodel.DescriptionLoD;
 import org.sleuthkit.datamodel.timeline.EventType;
+import org.sleuthkit.datamodel.timeline.EventTypeZoomLevel;
 import org.sleuthkit.datamodel.timeline.TimelineEvent;
 
 /**
@@ -80,21 +82,19 @@ public class EventCluster implements MultiEvent<EventStripe> {
     /**
      * merge two event clusters into one new event cluster.
      *
-     * @param cluster1
      * @param event
+     * @param eventSpan the value of eventSpan
+     * @param typeZoomLevel the value of typeZoomLevel
+     * @param eventType the value of eventType
      *
-     * @return a new event cluster that is the result of merging the given
-     *         events clusters
+     * @return the org.sleuthkit.autopsy.timeline.ui.detailview.datamodel.EventCluster
      */
-    EventCluster add(TimelineEvent event, Interval eventSpan) {
+    EventCluster add(TimelineEvent event, Interval eventSpan,   EventType eventType) {
+        Preconditions.checkArgument(getEventType() == eventType,
+                "event clusters are not compatible: they have different types");
 
-        if (getEventType() != event.getEventType()) {
-            throw new IllegalArgumentException("event clusters are not compatible: they have different types");
-        }
-
-        if (!getDescription().equals(event.getDescription(getDescriptionLoD()))) {
-            throw new IllegalArgumentException("event clusters are not compatible: they have different descriptions");
-        }
+        Preconditions.checkArgument(getDescription().equals(event.getDescription(getDescriptionLoD())),
+                "event clusters are not compatible: they have different descriptions");
 
         Interval spanningInterval = IntervalUtils.span(span, eventSpan);
 

@@ -86,13 +86,6 @@ final class DetailsChart extends Control implements TimeLineChart<DateTime> {
     private final ObservableList<EventNodeBase<?>> selectedNodes;
 
     /**
-     * An ObservableList representing all the events in the tree as a flat list
-     * of events whose roots are in the eventStripes lists
-     *
-     */
-    private final ObservableList<DetailViewEvent> nestedEvents = FXCollections.observableArrayList();
-
-    /**
      * Aggregates all the settings related to the layout of this chart as one
      * object.
      */
@@ -170,7 +163,6 @@ final class DetailsChart extends Control implements TimeLineChart<DateTime> {
     @ThreadConfined(type = ThreadConfined.ThreadType.JFX)
     void addStripe(EventStripe stripe) {
         rootEventStripes.add(stripe);
-        nestedEvents.add(stripe);
     }
 
     /**
@@ -215,14 +207,6 @@ final class DetailsChart extends Control implements TimeLineChart<DateTime> {
     @ThreadConfined(type = ThreadConfined.ThreadType.JFX)
     void reset() {
         rootEventStripes.clear();
-        nestedEvents.clear();
-    }
-
-    /**
-     * Get the tree of event stripes flattened into a list
-     */
-    public ObservableList<DetailViewEvent> getAllNestedEvents() {
-        return nestedEvents;
     }
 
     /**

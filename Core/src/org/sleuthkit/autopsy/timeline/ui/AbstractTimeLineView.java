@@ -27,7 +27,10 @@ import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Task;
+import javafx.concurrent.Worker;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
@@ -100,7 +103,6 @@ public abstract class AbstractTimeLineView extends BorderPane {
     public void handleRefreshRequested(RefreshRequestedEvent event) {
         refresh();
     }
- 
 
     /**
      * Does the view represent an out-of-date state of the DB. It might if, for
@@ -145,8 +147,8 @@ public abstract class AbstractTimeLineView extends BorderPane {
             updateTask = null;
         }
         updateTask = getNewUpdateTask();
-        updateTask.stateProperty().addListener((Observable observable) -> {
-            switch (updateTask.getState()) {
+        updateTask.stateProperty().addListener((observable, oldValue, newValue) -> {
+            switch (newValue) {
                 case CANCELLED:
                 case FAILED:
                 case READY:
@@ -155,13 +157,14 @@ public abstract class AbstractTimeLineView extends BorderPane {
                     break;
                 case SUCCEEDED:
                     try {
-                        this.hasVisibleEvents.set(updateTask.get());
+                        hasVisibleEvents.set(updateTask.get());
                     } catch (InterruptedException | ExecutionException ex) {
                         logger.log(Level.SEVERE, "Unexpected exception updating view", ex); //NON-NLS
                     }
                     break;
             }
         });
+
         getController().monitorTask(updateTask);
     }
 

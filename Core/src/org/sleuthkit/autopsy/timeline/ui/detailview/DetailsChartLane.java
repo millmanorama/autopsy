@@ -28,16 +28,12 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
-import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyDoubleWrapper;
@@ -54,7 +50,6 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.MouseEvent;
 import static javafx.scene.layout.Region.USE_PREF_SIZE;
 import org.joda.time.DateTime;
-import org.openide.util.Exceptions;
 import org.sleuthkit.autopsy.coreutils.ThreadConfined;
 import org.sleuthkit.autopsy.timeline.TimeLineController;
 import org.sleuthkit.autopsy.timeline.ui.AbstractTimelineChart;
@@ -67,16 +62,14 @@ import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.DescriptionFilter;
 import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.FilterState;
 import org.sleuthkit.datamodel.TskCoreException;
 import rx.Observable;
-import rx.functions.Func1;
 
 /**
  * One "lane" of a the details view, contains all the core logic and layout
  * code.
  *
  * NOTE: It was too hard to control the threading of this chart via the
- * complicated default listeners. Instead clients should use
- * addDataItem(javafx.scene.chart.XYChart.Data) and
- * removeDataItem(javafx.scene.chart.XYChart.Data) to add and remove data.
+ * complicated default listeners. Instead clients should use addEvent and
+ * removeEvent to add and remove data.
  */
 abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateTime, Y> implements ContextMenuProvider {
 
@@ -95,6 +88,12 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
     @ThreadConfined(type = ThreadConfined.ThreadType.JFX)
     final ObservableList< EventNodeBase<?>> nodes = FXCollections.observableArrayList();
     final ObservableList< EventNodeBase<?>> sortedNodes = nodes.sorted(Comparator.comparing(EventNodeBase::getStartMillis));
+
+    /**
+     * the group that all event nodes are added to. This facilitates scrolling
+     * by allowing a single translation of this group.
+     */
+    final Group nodeGroup = new Group();
 
     private final boolean useQuickHideFilters;
 
@@ -203,7 +202,7 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
         layoutSettings.bandByTypeProperty().addListener(layoutInvalidationListener);
         layoutSettings.oneEventPerRowProperty().addListener(layoutInvalidationListener);
         layoutSettings.truncateAllProperty().addListener(layoutInvalidationListener);
-        layoutSettings.truncateAllProperty().addListener(layoutInvalidationListener);
+        layoutSettings.truncateWidthProperty().addListener(layoutInvalidationListener);
         layoutSettings.descrVisibilityProperty().addListener(layoutInvalidationListener);
         controller.getQuickHideFilters().addListener(layoutInvalidationListener);
 
@@ -317,10 +316,9 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
     void addEvent(Y event) throws TskCoreException {
         EventNodeBase<?> eventNode = createNode(this, event);
         eventMap.put(event, eventNode);
-        Platform.runLater(() -> {
-            nodes.add(eventNode);
-            nodeGroup.getChildren().add(eventNode);
-        });
+
+        nodes.add(eventNode);
+        nodeGroup.getChildren().add(eventNode);
     }
 
     /**
@@ -332,17 +330,11 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
      */
     void removeEvent(Y event) {
         EventNodeBase<?> removedNode = eventMap.remove(event);
-        Platform.runLater(() -> {
-            nodes.remove(removedNode);
-            nodeGroup.getChildren().removeAll(removedNode);
-        });
+//        Platform.runLater(() -> {
+        nodes.remove(removedNode);
+        nodeGroup.getChildren().removeAll(removedNode);
+//        });
     }
-
-    /**
-     * the group that all event nodes are added to. This facilitates scrolling
-     * by allowing a single translation of this group.
-     */
-    final Group nodeGroup = new Group();
 
     public synchronized void setVScroll(double vScrollValue) {
         nodeGroup.setTranslateY(-vScrollValue);

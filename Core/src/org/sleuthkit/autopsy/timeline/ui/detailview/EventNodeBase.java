@@ -379,15 +379,17 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
 
         if (timeline != null) {
             timeline.stop();
-         //   Platform.runLater(this::requestChartLayout);
+//            Platform.runLater(this::requestChartLayout);
         }
-
-        timeline = new Timeline(new KeyFrame(Duration.millis(200),
-                new KeyValue(layoutXProperty(), xLeft),
-                new KeyValue(layoutYProperty(), yTop))
-        );
-        timeline.setOnFinished(finished -> Platform.runLater(this::requestChartLayout));
-        timeline.play();
+        if (getLayoutX() != xLeft
+            || getLayoutY() != yTop) {
+            timeline = new Timeline(new KeyFrame(Duration.millis(200),
+                    new KeyValue(layoutXProperty(), xLeft),
+                    new KeyValue(layoutYProperty(), yTop))
+            );
+            timeline.setOnFinished(finished -> Platform.runLater(this::requestChartLayout));
+            timeline.play();
+        }
     }
 
     void requestChartLayout() {

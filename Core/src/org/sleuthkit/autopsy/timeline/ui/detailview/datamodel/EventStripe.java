@@ -25,6 +25,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.sleuthkit.datamodel.DescriptionLoD;
 import org.sleuthkit.datamodel.timeline.EventType;
 
@@ -69,23 +72,23 @@ public final class EventStripe implements MultiEvent<EventCluster> {
      */
     private final Set<Long> hashHits;
 
-    EventStripe merge(EventStripe stripeB) {
-
-        Preconditions.checkNotNull(stripeB);
-        Preconditions.checkArgument(Objects.equals(description, stripeB.description));
-        Preconditions.checkArgument(Objects.equals(lod, stripeB.lod));
-        Preconditions.checkArgument(Objects.equals(type, stripeB.type));
-        Preconditions.checkArgument(Objects.equals(parent, stripeB.parent));
-
-        getClusters().addAll(stripeB.getClusters());
-        getEventIDs().addAll(stripeB.getEventIDs());
-        getEventIDsWithTags().addAll(stripeB.getEventIDsWithTags());
-        getEventIDsWithHashHits().addAll(stripeB.getEventIDsWithHashHits());
-        EventCluster mergedparent = getParent().orElse(stripeB.getParent().orElse(null));
-
-        return new EventStripe(mergedparent, getEventType(), getDescription(), getDescriptionLoD(), getClusters(), getEventIDs(),
-                getEventIDsWithTags(), getEventIDsWithHashHits());
-    }
+//    EventStripe merge(EventStripe stripeB) {
+//
+//        Preconditions.checkNotNull(stripeB);
+//        Preconditions.checkArgument(Objects.equals(description, stripeB.description));
+//        Preconditions.checkArgument(Objects.equals(lod, stripeB.lod));
+//        Preconditions.checkArgument(Objects.equals(type, stripeB.type));
+//        Preconditions.checkArgument(Objects.equals(parent, stripeB.parent));
+//
+//        getClusters().addAll(stripeB.getClusters());
+//        getEventIDs().addAll(stripeB.getEventIDs());
+//        getEventIDsWithTags().addAll(stripeB.getEventIDsWithTags());
+//        getEventIDsWithHashHits().addAll(stripeB.getEventIDsWithHashHits());
+//        EventCluster mergedparent = getParent().orElse(stripeB.getParent().orElse(null));
+//
+//        return new EventStripe(mergedparent, getEventType(), getDescription(), getDescriptionLoD(), getClusters(), getEventIDs(),
+//                getEventIDsWithTags(), getEventIDsWithHashHits());
+//    }
 
     public EventStripe withParent(EventCluster parent) {
         if (Objects.nonNull(this.parent)) {
@@ -94,9 +97,9 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         return new EventStripe(parent, this.type, this.description, this.lod, clusters, eventIDs, tagged, hashHits);
     }
 
-    private EventStripe(EventCluster parent, EventType type, String description,
-                        DescriptionLoD lod, SortedSet<EventCluster> clusters,
-                        Set<Long> eventIDs, Set<Long> tagged, Set<Long> hashHits) {
+    EventStripe(EventCluster parent, EventType type, String description,
+                DescriptionLoD lod, SortedSet<EventCluster> clusters,
+                Set<Long> eventIDs, Set<Long> tagged, Set<Long> hashHits) {
         this.parent = parent;
         this.type = type;
         this.description = description;
@@ -108,18 +111,36 @@ public final class EventStripe implements MultiEvent<EventCluster> {
         this.hashHits = hashHits;
     }
 
-    public EventStripe(EventCluster cluster) {
-        this.clusters = DetailsViewModel.copyAsSortedSet(singleton(cluster.withParent(this)),
-                comparing(EventCluster::getStartMillis));
-
-        type = cluster.getEventType();
-        description = cluster.getDescription();
-        lod = cluster.getDescriptionLoD();
-        eventIDs = cluster.getEventIDs();
-        tagged = cluster.getEventIDsWithTags();
-        hashHits = cluster.getEventIDsWithHashHits();
+    EventStripe(EventType type, String description, DescriptionLoD descriptionLOD, SortedSet<EventCluster> clusters) {
         this.parent = null;
+        this.type = type;
+        this.description = description;
+        this.lod = descriptionLOD;
+        this.clusters = clusters;
+
+        this.eventIDs = clusters.stream()
+                .flatMap(cluster -> cluster.getEventIDs().stream())
+                .collect(Collectors.toSet());
+        this.tagged = clusters.stream()
+                .flatMap(cluster -> cluster.getEventIDsWithTags().stream())
+                .collect(Collectors.toSet());
+        this.hashHits = clusters.stream()
+                .flatMap(cluster -> cluster.getEventIDsWithHashHits().stream())
+                .collect(Collectors.toSet());
     }
+
+//    public EventStripe(EventCluster cluster) {
+//        this.clusters = DetailsViewModel.copyAsSortedSet(singleton(cluster.withParent(this)),
+//                comparing(EventCluster::getStartMillis));
+//
+//        type = cluster.getEventType();
+//        description = cluster.getDescription();
+//        lod = cluster.getDescriptionLoD();
+//        eventIDs = cluster.getEventIDs();
+//        tagged = cluster.getEventIDsWithTags();
+//        hashHits = cluster.getEventIDsWithHashHits();
+//        this.parent = null;
+//    }
 
     @Override
     public Optional<EventCluster> getParent() {
