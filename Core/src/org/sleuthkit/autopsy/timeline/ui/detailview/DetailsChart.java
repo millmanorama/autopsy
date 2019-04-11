@@ -19,6 +19,7 @@
 package org.sleuthkit.autopsy.timeline.ui.detailview;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.MissingResourceException;
 import java.util.function.Predicate;
 import javafx.beans.property.SimpleObjectProperty;
@@ -84,6 +85,13 @@ final class DetailsChart extends Control implements TimeLineChart<DateTime> {
      * An ObservableList of the Nodes that are selected in this chart.
      */
     private final ObservableList<EventNodeBase<?>> selectedNodes;
+
+    /**
+     * An ObservableList representing all the events in the tree as a flat list
+     * of events whose roots are in the eventStripes lists
+     *
+     */
+    private final ObservableList<DetailViewEvent> nestedEvents = FXCollections.observableArrayList();
 
     /**
      * Aggregates all the settings related to the layout of this chart as one
@@ -156,13 +164,15 @@ final class DetailsChart extends Control implements TimeLineChart<DateTime> {
     }
 
     /**
-     * Add an EventStripe to the list of root stripes.
+     * Add a Collection of EventStripes to the list of root stripes.
      *
      * @param stripe The EventStripe to add.
      */
     @ThreadConfined(type = ThreadConfined.ThreadType.JFX)
-    void addStripe(EventStripe stripe) {
-        rootEventStripes.add(stripe);
+    void addStripes(Collection<EventStripe> stripes) {
+        stripes.removeAll(rootEventStripes);
+        rootEventStripes.addAll(stripes);
+        nestedEvents.addAll(stripes);
     }
 
     /**
@@ -207,6 +217,14 @@ final class DetailsChart extends Control implements TimeLineChart<DateTime> {
     @ThreadConfined(type = ThreadConfined.ThreadType.JFX)
     void reset() {
         rootEventStripes.clear();
+        nestedEvents.clear();
+    }
+
+    /**
+     * Get the tree of event stripes flattened into a list
+     */
+    public ObservableList<DetailViewEvent> getAllNestedEvents() {
+        return nestedEvents;
     }
 
     /**

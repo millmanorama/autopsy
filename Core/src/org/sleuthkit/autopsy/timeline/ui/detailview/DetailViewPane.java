@@ -410,33 +410,12 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             updateMessage(Bundle.DetailsUpdateTask_queryDb());
 
             ObservableList<EventStripe> resultStripes = FXCollections.observableArrayList();
-
-//            //listen as stripes are populated and forward to the actual chart
-//            resultStripes.addListener(new ListChangeListener<EventStripe>() {
-//                boolean dismissed = false;
-//
-//                @Override
-//                public void onChanged(ListChangeListener.Change<? extends EventStripe> c) {
-//                    if (isCancelled()) {
-//                        return;
-//                    }
-//                    final int size = resultStripes.size();
-//                    if (dismissed == false && size > 2000) {
-//                        promptToCancel(size);
-//                        dismissed = true;
-//                    }
-//
-//                    while (c.next()) {
-//                        if (isCancelled()) {
-//                            return;
-//                        }
-//                        c.getAddedSubList().forEach(stripe -> Platform.runLater(() -> getChart().addStripe(stripe)));
-//                    }
-//                }
-//            });
-//            resetView(getEventsModel().getTimeRange()); //clear the chart and set the horixontal axis
+ 
             //get the event stripes to be displayed
             detailsViewModel.getEventStripes(UIFilter.getAllPassFilter(), newZoom, resultStripes, DetailsUpdateTask.this);
+            if (isCancelled()) {
+                return null;
+            }
             final int size = resultStripes.size();
             if (size > 2000) {
                 promptToCancel(size);
@@ -449,8 +428,8 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             currentZoom = newZoom;
             Platform.runLater(() -> {
                 getChart().getRootEventStripes().retainAll(resultStripes);
-                resultStripes.forEach(getChart()::addStripe);
-                getChart().getRootEventStripes().retainAll(resultStripes);
+                getChart().getAllNestedEvents().retainAll(resultStripes);
+                getChart().addStripes(resultStripes);
                 setDateValues(getEventsModel().getTimeRange());
             });
             updateMessage(Bundle.DetailsUpdateTask_updateUI());
@@ -479,6 +458,13 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             };
             //show dialog on JFX thread and block this thread until the dialog is dismissed.
             Platform.runLater(task);
+            try {
+                task.get();
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            } catch (ExecutionException ex) {
+                Exceptions.printStackTrace(ex);
+            }
         }
 
         @Override
