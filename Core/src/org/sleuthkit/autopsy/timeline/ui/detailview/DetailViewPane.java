@@ -19,10 +19,8 @@
 package org.sleuthkit.autopsy.timeline.ui.detailview;
 
 import com.google.common.collect.ImmutableList;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -31,7 +29,6 @@ import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
 import javafx.collections.FXCollections;
-import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
@@ -58,7 +55,6 @@ import org.openide.util.NbBundle;
 import org.sleuthkit.autopsy.coreutils.Logger;
 import org.sleuthkit.autopsy.coreutils.ThreadConfined;
 import org.sleuthkit.autopsy.timeline.FXMLConstructor;
-import org.sleuthkit.autopsy.timeline.FilteredEventsModel;
 import org.sleuthkit.autopsy.timeline.TimeLineController;
 import org.sleuthkit.autopsy.timeline.ViewMode;
 import org.sleuthkit.autopsy.timeline.ui.AbstractTimelineChart;
@@ -470,7 +466,7 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
         @Override
         protected void cancelled() {
             super.cancelled();
-            Platform.runLater(getController()::retreat);
+     
         }
 
         @Override
