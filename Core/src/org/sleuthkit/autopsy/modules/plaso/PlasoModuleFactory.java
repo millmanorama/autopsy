@@ -24,6 +24,7 @@ import org.sleuthkit.autopsy.coreutils.Version;
 import org.sleuthkit.autopsy.ingest.DataSourceIngestModule;
 import org.sleuthkit.autopsy.ingest.FileIngestModule;
 import org.sleuthkit.autopsy.ingest.IngestModuleFactory;
+import org.sleuthkit.autopsy.ingest.IngestModuleFactoryAdapter;
 import org.sleuthkit.autopsy.ingest.IngestModuleGlobalSettingsPanel;
 import org.sleuthkit.autopsy.ingest.IngestModuleIngestJobSettings;
 import org.sleuthkit.autopsy.ingest.IngestModuleIngestJobSettingsPanel;
@@ -34,8 +35,9 @@ import org.sleuthkit.autopsy.ingest.IngestModuleIngestJobSettingsPanel;
  */
 @ServiceProvider(service = IngestModuleFactory.class)
 @NbBundle.Messages({"PlasoModuleFactory.ingestJobSettings.exception.msg=Expected settings argument to be instanceof PlasoModuleSettings"})
-public class PlasoModuleFactory implements IngestModuleFactory {
+ public class PlasoModuleFactory extends IngestModuleFactoryAdapter {
 
+ 
     @NbBundle.Messages({"PlasoModuleFactory_moduleName=Plaso"})
     static String getModuleName() {
         return Bundle.PlasoModuleFactory_moduleName();
@@ -108,5 +110,16 @@ public class PlasoModuleFactory implements IngestModuleFactory {
     @Override
     public FileIngestModule createFileIngestModule(IngestModuleIngestJobSettings settings) {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * This module typically takes a very long time and is there for not enabled
+     * by default.
+     *
+     * @return False.
+     */
+    @Override
+    public boolean isEnabledByDefault() {
+        return false;
     }
 }
