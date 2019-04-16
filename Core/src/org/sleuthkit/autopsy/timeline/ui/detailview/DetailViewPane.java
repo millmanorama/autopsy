@@ -19,6 +19,7 @@
 package org.sleuthkit.autopsy.timeline.ui.detailview;
 
 import com.google.common.collect.ImmutableList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -405,10 +406,8 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             }
             updateMessage(Bundle.DetailsUpdateTask_queryDb());
 
-            ObservableList<EventStripe> resultStripes = FXCollections.observableArrayList();
- 
             //get the event stripes to be displayed
-            detailsViewModel.getEventStripes(UIFilter.getAllPassFilter(), newZoom, resultStripes, DetailsUpdateTask.this);
+            List<EventStripe> resultStripes = detailsViewModel.getEventStripes(UIFilter.getAllPassFilter(), newZoom, DetailsUpdateTask.this);
             if (isCancelled()) {
                 return null;
             }
@@ -466,7 +465,7 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
         @Override
         protected void cancelled() {
             super.cancelled();
-     
+
         }
 
         @Override

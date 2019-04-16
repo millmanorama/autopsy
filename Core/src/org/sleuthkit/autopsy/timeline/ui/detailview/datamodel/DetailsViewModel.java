@@ -27,6 +27,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import static java.util.Comparator.comparing;
 import java.util.HashMap;
@@ -105,26 +106,25 @@ final public class DetailsViewModel {
      * @throws org.sleuthkit.datamodel.TskCoreException
      */
     public List<EventStripe> getEventStripes(ZoomState zoom) throws TskCoreException {
-        return getEventStripes(UIFilter.getAllPassFilter(), zoom, new ArrayList<>(), null);
+        return getEventStripes(UIFilter.getAllPassFilter(), zoom, null);
     }
 
     public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom) throws TskCoreException {
-        return getEventStripes(uiFilter, zoom, new ArrayList<>(), null);
+        return getEventStripes(uiFilter, zoom, null);
     }
 
     /**
-     * @param uiFilter      Filtere specific to the details view.
-     * @param zoom          The zoom state to use to get and cluster the events.
-     * @param resultStripes Add event stripes to this list.
-     * @param cancelation   A task that can be used to cancel this process.
+     * @param uiFilter    Filtere specific to the details view.
+     * @param zoom        The zoom state to use to get and cluster the events.
+     * @param cancelation A task that can be used to cancel this process.
      *
      * @return a list of EventStripes that are within the requested time range
-     *         and pass the requested filter. This will be the same list and
-     *         resultStripes.
+     *         and pass the requested filter.
      *
      * @throws org.sleuthkit.datamodel.TskCoreException
      */
-    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom, List<EventStripe> resultStripes, Task<?> cancelation) throws TskCoreException {
+    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom, Task<?> cancelation) throws TskCoreException {
+
         //unpack params
         Interval timeRange = zoom.getTimeRange();
         DescriptionLoD descriptionLOD = zoom.getDescriptionLOD();
@@ -141,7 +141,7 @@ final public class DetailsViewModel {
         //filter (cached) events by uiFilter and add them to stripeMap
         for (TimelineEvent event : getCachedEvents(zoom)) {
             if (cancelation != null && cancelation.isCancelled()) {
-                return resultStripes;
+                return Collections.emptyList();
             }
 
             if (uiFilter.test(event)) {
@@ -155,10 +155,11 @@ final public class DetailsViewModel {
                 .sorted(comparing(key -> stripeMap.get(key).first().getStartMillis()))
                 .collect(toList());
 
+        List<EventStripe> resultStripes = new ArrayList<>();
         //for each key, make a stripe, including internal clusters.
         for (Pair<EventType, String> key : eventKeys) {
             if (cancelation != null && cancelation.isCancelled()) {
-                return resultStripes;
+                return Collections.emptyList();
             }
 
             //unpack keys 
