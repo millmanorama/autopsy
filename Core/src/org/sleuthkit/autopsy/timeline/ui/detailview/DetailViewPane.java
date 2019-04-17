@@ -55,6 +55,7 @@ import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.sleuthkit.autopsy.coreutils.Logger;
 import org.sleuthkit.autopsy.coreutils.ThreadConfined;
+import org.sleuthkit.autopsy.progress.ProgressIndicator;
 import org.sleuthkit.autopsy.timeline.FXMLConstructor;
 import org.sleuthkit.autopsy.timeline.TimeLineController;
 import org.sleuthkit.autopsy.timeline.ViewMode;
@@ -407,7 +408,7 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             updateMessage(Bundle.DetailsUpdateTask_queryDb());
 
             //get the event stripes to be displayed
-            List<EventStripe> resultStripes = detailsViewModel.getEventStripes(UIFilter.getAllPassFilter(), newZoom, DetailsUpdateTask.this);
+            List<EventStripe> resultStripes = detailsViewModel.getEventStripes(UIFilter.getAllPassFilter(), newZoom, new ProgressCancellable());
             if (isCancelled()) {
                 return null;
             }
@@ -440,13 +441,8 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
                         alert.setHeaderText("");
                         alert.initModality(Modality.APPLICATION_MODAL);
                         alert.initOwner(getScene().getWindow());
-                        ButtonType userResponse = alert.showAndWait().orElse(back);
-                        if (userResponse == back) {
-                            DetailsUpdateTask.this.cancel();
-                        }
-                        return userResponse;
+                        return alert.showAndWait().orElse(back);
                     } else {
-                        DetailsUpdateTask.this.cancel();
                         return back;
                     }
                 }
@@ -454,10 +450,11 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
             //show dialog on JFX thread and block this thread until the dialog is dismissed.
             Platform.runLater(task);
             try {
-                task.get();
-            } catch (InterruptedException ex) {
-                Exceptions.printStackTrace(ex);
-            } catch (ExecutionException ex) {
+                if (task.get() == back) {
+                    DetailsUpdateTask.this.cancel(true);
+                    getController().retreat();;
+                }
+            } catch (InterruptedException | ExecutionException ex) {
                 Exceptions.printStackTrace(ex);
             }
         }
@@ -465,7 +462,6 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
         @Override
         protected void cancelled() {
             super.cancelled();
-
         }
 
         @Override
@@ -478,6 +474,69 @@ final public class DetailViewPane extends AbstractTimelineChart<DateTime, EventS
         protected void succeeded() {
             super.succeeded();
             layoutDateLabels();
+        }
+
+        private class ProgressCancellable implements DetailsViewModel.CancellabelProgress {
+
+            long total;
+
+            @Override
+            public void start(String message, int totalWorkUnits) {
+                updateMessage(message);
+                total = totalWorkUnits;
+                updateProgress(0, totalWorkUnits);
+            }
+
+            @Override
+            public void start(String message) {
+                updateMessage(message);
+            }
+
+            @Override
+            public void switchToIndeterminate(String message) {
+                updateMessage(message);
+                updateProgress(-1, 1);
+            }
+
+            @Override
+            public void switchToDeterminate(String message, int workUnitsCompleted, int totalWorkUnits) {
+                updateMessage(message);
+                total = totalWorkUnits;
+                updateProgress(workUnitsCompleted, totalWorkUnits);
+            }
+
+            @Override
+            public void progress(String message) {
+                updateMessage(message);
+            }
+
+            @Override
+            public void progress(int workUnitsCompleted) {
+                updateProgress(workUnitsCompleted, total);
+            }
+
+            @Override
+            public void progress(String message, int workUnitsCompleted) {
+                updateMessage(message);
+                updateProgress(workUnitsCompleted, total);
+
+            }
+
+            @Override
+            public void setCancelling(String cancellingMessage) {
+                updateMessage(cancellingMessage);
+                cancel(true);
+            }
+
+            @Override
+            public void finish() {
+                updateProgress(1.0, 1.0);
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return DetailsUpdateTask.this.isCancelled();
+            }
         }
     }
 }

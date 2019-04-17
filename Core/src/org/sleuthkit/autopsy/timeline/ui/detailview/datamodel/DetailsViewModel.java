@@ -24,39 +24,30 @@ import com.google.common.collect.TreeMultimap;
 import com.google.common.eventbus.Subscribe;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import static java.util.Comparator.comparing;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.logging.Level;
-import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 import javafx.concurrent.Task;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.joda.time.DateTimeZone;
 import org.joda.time.Interval;
-import org.joda.time.Period;
-import org.openide.util.Exceptions;
 import org.sleuthkit.autopsy.coreutils.Logger;
+import org.sleuthkit.autopsy.progress.ProgressIndicator;
 import org.sleuthkit.autopsy.timeline.FilteredEventsModel;
-import org.sleuthkit.autopsy.timeline.TimeLineController;
 import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.UIFilter;
 import org.sleuthkit.autopsy.timeline.utils.CacheLoaderImpl;
-import org.sleuthkit.autopsy.timeline.utils.RangeDivision;
-import org.sleuthkit.autopsy.timeline.zooming.TimeUnits;
 import org.sleuthkit.autopsy.timeline.zooming.ZoomState;
 import org.sleuthkit.datamodel.DescriptionLoD;
 import org.sleuthkit.datamodel.SleuthkitCase;
@@ -114,16 +105,16 @@ final public class DetailsViewModel {
     }
 
     /**
-     * @param uiFilter    Filtere specific to the details view.
-     * @param zoom        The zoom state to use to get and cluster the events.
-     * @param cancelation A task that can be used to cancel this process.
+     * @param uiFilter Filtere specific to the details view.
+     * @param zoom     The zoom state to use to get and cluster the events.
+     * @param task     A task that can be used to cancel this process.
      *
      * @return a list of EventStripes that are within the requested time range
      *         and pass the requested filter.
      *
      * @throws org.sleuthkit.datamodel.TskCoreException
      */
-    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom, Task<?> cancelation) throws TskCoreException {
+    public List<EventStripe> getEventStripes(UIFilter uiFilter, ZoomState zoom, CancellabelProgress task) throws TskCoreException {
 
         //unpack params
         Interval timeRange = zoom.getTimeRange();
@@ -137,44 +128,63 @@ final public class DetailsViewModel {
         TreeMultimap<Pair<EventType, String>, TimelineEvent> stripeMap = TreeMultimap.create(
                 Comparator.naturalOrder(),
                 comparing(TimelineEvent::getStartMillis));
-
+        if (task != null) {
+            task.switchToIndeterminate("retreiving events");
+        }
+        List<TimelineEvent> cachedEvents = getCachedEvents(zoom);
+        if (task != null) {
+            task.switchToDeterminate("filtering events", 0, cachedEvents.size());
+        }
+        int i = 0;
         //filter (cached) events by uiFilter and add them to stripeMap
-        for (TimelineEvent event : getCachedEvents(zoom)) {
-            if (cancelation != null && cancelation.isCancelled()) {
-                return Collections.emptyList();
+        for (TimelineEvent event : cachedEvents) {
+            String description = event.getDescription(descriptionLOD);
+            if (task != null) {
+                if (task.isCancelled()) {
+                    return Collections.emptyList();
+                }
+                task.progress("filtering: " + StringUtils.abbreviate(description, 24), i++);
             }
-
             if (uiFilter.test(event)) {
-                Pair<EventType, String> stripeKey = Pair.of(event.getEventType(typeZoomLevel), event.getDescription(descriptionLOD));
+                Pair<EventType, String> stripeKey = Pair.of(event.getEventType(typeZoomLevel), description);
                 stripeMap.put(stripeKey, event);
             }
         }
-
+        if (task != null) {
+            task.switchToIndeterminate("sorting descriptions");
+        }
         //sort map keys by start time.
         List<Pair<EventType, String>> eventKeys = stripeMap.keySet().stream()
                 .sorted(comparing(key -> stripeMap.get(key).first().getStartMillis()))
                 .collect(toList());
 
+        if (task != null) {
+            task.switchToDeterminate("clustering events", 0, eventKeys.size());
+        }
+        i = 0;
         List<EventStripe> resultStripes = new ArrayList<>();
         //for each key, make a stripe, including internal clusters.
         for (Pair<EventType, String> key : eventKeys) {
-            if (cancelation != null && cancelation.isCancelled()) {
-                return Collections.emptyList();
-            }
 
             //unpack keys 
             EventType zoomedType = key.getLeft();
             String description = key.getRight();
-
+            if (task != null) {
+                if (task.isCancelled()) {
+                    return Collections.emptyList();
+                }
+                task.progress("clustering: " + StringUtils.abbreviate(description, 24), i++);
+            }
             SortedSet<EventCluster> clusters = new TreeSet<>(comparing(EventCluster::getStartMillis));
 
             Iterator<TimelineEvent> sortedEventIterator = stripeMap.get(key).iterator();
             TimelineEvent currentEvent = sortedEventIterator.next();
             EventCluster currentCluster = new EventCluster(currentEvent, zoomedType, descriptionLOD);
             while (sortedEventIterator.hasNext()) {
-                if (cancelation != null && cancelation.isCancelled()) {
+                if (task != null && task.isCancelled()) {
                     return resultStripes;
                 }
+
                 TimelineEvent next = sortedEventIterator.next();
                 Interval nextEventSpan = new Interval(next.getStartMillis(), next.getEndMillis());
 
@@ -306,10 +316,6 @@ final public class DetailsViewModel {
 
     }
 
-    private static Pair<EventType, String> getTypeDescriptionPair(EventCluster eventCluster) {
-        return Pair.of(eventCluster.getEventType(), eventCluster.getDescription());
-    }
-
     /** Make a sorted copy of the given set using the given comparator to sort
      * it.
      *
@@ -331,4 +337,8 @@ final public class DetailsViewModel {
         return s;
     }
 
+    public static interface CancellabelProgress extends ProgressIndicator {
+
+        public boolean isCancelled();
+    }
 }
