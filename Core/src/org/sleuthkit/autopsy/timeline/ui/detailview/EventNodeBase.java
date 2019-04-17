@@ -379,7 +379,7 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
 
         if (timeline != null) {
             timeline.stop();
-//            Platform.runLater(this::requestChartLayout);
+            Platform.runLater(this::requestChartLayout);
         }
         if (getLayoutX() != xLeft
             || getLayoutY() != yTop) {
