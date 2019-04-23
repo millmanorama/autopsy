@@ -143,7 +143,7 @@ final public class DetailsViewModel {
                 if (task.isCancelled()) {
                     return Collections.emptyList();
                 }
-                task.progress("filtering: " + StringUtils.abbreviate(description, 24), i++);
+                task.progress("filtering: " + StringUtils.abbreviateMiddle(description,"...", 24), i++);
             }
             if (uiFilter.test(event)) {
                 Pair<EventType, String> stripeKey = Pair.of(event.getEventType(typeZoomLevel), description);

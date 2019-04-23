@@ -86,6 +86,7 @@ import org.sleuthkit.datamodel.SleuthkitCase;
 import org.sleuthkit.datamodel.TskCoreException;
 import org.sleuthkit.datamodel.timeline.EventType;
 import org.sleuthkit.datamodel.timeline.EventTypeZoomLevel;
+import static org.sleuthkit.datamodel.timeline.EventTypeZoomLevel.SUB_TYPE;
 import org.sleuthkit.datamodel.timeline.TimelineEvent;
 
 /**
@@ -359,6 +360,10 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
         return tlEvent.getEventType();
     }
 
+    public EventType getEventType(EventTypeZoomLevel zoomLevel) {
+        return tlEvent.getEventType(zoomLevel);
+    }
+
     long getStartMillis() {
         return tlEvent.getStartMillis();
     }
@@ -379,7 +384,7 @@ public abstract class EventNodeBase<Type extends DetailViewEvent> extends StackP
 
         if (timeline != null) {
             timeline.stop();
-            Platform.runLater(this::requestChartLayout);
+//            Platform.runLater(this::requestChartLayout);
         }
         if (getLayoutX() != xLeft
             || getLayoutY() != yTop) {

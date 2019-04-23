@@ -28,12 +28,18 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import javafx.beans.InvalidationListener;
 import javafx.beans.property.ReadOnlyDoubleProperty;
 import javafx.beans.property.ReadOnlyDoubleWrapper;
@@ -61,6 +67,7 @@ import org.sleuthkit.autopsy.timeline.ui.detailview.datamodel.SingleDetailsViewE
 import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.DescriptionFilter;
 import org.sleuthkit.autopsy.timeline.ui.filtering.datamodel.FilterState;
 import org.sleuthkit.datamodel.TskCoreException;
+import org.sleuthkit.datamodel.timeline.EventTypeZoomLevel;
 import rx.Observable;
 
 /**
@@ -145,12 +152,15 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
         descriptionWidth = layoutSettings.getTruncateAll() ? layoutSettings.getTruncateWidth() : USE_PREF_SIZE;
 
         if (layoutSettings.getBandByType()) {
+            EventTypeZoomLevel eventTypeZoom = controller.getEventsModel().getEventTypeZoom();
             maxY.set(0);
             sortedNodes.stream()
-                    .collect(Collectors.groupingBy(EventNodeBase<?>::getEventType)).values()
-                    .forEach(inputNodes -> maxY.set(layoutEventBundleNodes(inputNodes, maxY.get())));
+                    .collect(groupingBy(eventNodeBase -> eventNodeBase.getEventType(eventTypeZoom),
+                            TreeMap::new, toList()))
+                    .values()
+                    .forEach(inputNodes -> maxY.set(layoutEventNodes(inputNodes, maxY.get())));
         } else {
-            maxY.set(layoutEventBundleNodes(sortedNodes, 0));
+            maxY.set(layoutEventNodes(sortedNodes, 0));
         }
         doAdditionalLayout();
         setCursor(null);
@@ -236,7 +246,7 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
      *
      * @return the maximum y coordinate used by any of the layed out nodes.
      */
-    public double layoutEventBundleNodes(final Collection<? extends EventNodeBase<?>> nodes, final double minY) {
+    public double layoutEventNodes(final Collection<? extends EventNodeBase<?>> nodes, final double minY) {
         double localMax = minY;
         RTree<String, Rectangle> tree = RTree.create();
 
@@ -387,24 +397,45 @@ abstract class DetailsChartLane<Y extends DetailViewEvent> extends XYChart<DateT
 
         //until the node is not overlapping any others try moving it down.
         boolean overlapping = true;
+        Rectangle verticalOccupancy = null;
+        while (overlapping) { //while overlapping
+            double yBottom = yTop + h; //compute bottom as top plus height
 
-        do {
-            double yBottom = yTop + h;
+            RectangleDouble nodeRect = RectangleDouble.create(xLeft, yTop, xRight, yBottom); // probe rectangle
+            Observable<Entry<String, Rectangle>> search = tree.search(nodeRect, MINIMUM_EVENT_NODE_GAP); // search for intersections
 
-            RectangleDouble nodeRect = RectangleDouble.create(xLeft, yTop, xRight, yBottom);
-            Observable<Entry<String, Rectangle>> search = tree.search(nodeRect, MINIMUM_EVENT_NODE_GAP);
+            double maxIntersectY = -1; //no intersection
+            Iterable<Entry<String, Rectangle>> iterator = search.toBlocking().toIterable();
 
-            double maxIntersectY = -1;
-            for (Entry<String, Rectangle> r : search.toBlocking().toIterable()) {
-                maxIntersectY = Math.max(maxIntersectY, r.geometry().y2());
+            for (Entry<String, Rectangle> r : iterator) {  //intersections...
+                Rectangle intersected = r.geometry();
+                if (verticalOccupancy == null) {
+                    verticalOccupancy = intersected;
+                } else {
+                    try {
+                        verticalOccupancy = RectangleDouble.create(
+                                Math.max(intersected.x1(), verticalOccupancy.x1()),
+                                Math.min(intersected.y1(), verticalOccupancy.y1()),
+                                Math.min(intersected.x2(), verticalOccupancy.x2()),
+                                Math.max(intersected.y2(), verticalOccupancy.y2())
+                        );
+                    } catch (java.lang.IllegalArgumentException e) {
+                    }
+                }
+
+                maxIntersectY = Math.max(maxIntersectY, r.geometry().y2()); //compute max (bottom ) of all intersections
+                break;
             }
 
-            if (maxIntersectY >= 0) {
-                yTop = maxIntersectY + MINIMUM_EVENT_NODE_GAP;
+            if (maxIntersectY >= 0) { // there was an intersection
+                yTop = maxIntersectY + MINIMUM_EVENT_NODE_GAP; // move probe rectanlge down
             } else {
-                overlapping = false;
+                overlapping = false; // no intersection, break loop
             }
-        } while (overlapping);
+        };
+        if (verticalOccupancy != null) {
+            tree.add("dummy", verticalOccupancy);
+        }
         return yTop;
     }
 

@@ -117,7 +117,7 @@ abstract class MultiEventNodeBase< BundleType extends MultiEvent<ParentType>, Pa
 
     @Override
     protected void layoutChildren() {
-        chartLane.layoutEventBundleNodes(subNodes, 0);
+        chartLane.layoutEventNodes(subNodes, 0);
         super.layoutChildren();
     }
 

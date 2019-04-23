@@ -24,7 +24,8 @@ import java.util.Set;
 import java.util.SortedSet;
 import org.sleuthkit.datamodel.DescriptionLoD;
 import org.sleuthkit.datamodel.timeline.EventType;
-import org.sleuthkit.datamodel.timeline.TimelineEvent;
+import org.sleuthkit.datamodel.timeline.EventTypeZoomLevel;
+import static org.sleuthkit.datamodel.timeline.EventTypeZoomLevel.SUB_TYPE;
 
 /**
  * An event of the timeline. Concrete implementations may represent single
@@ -89,6 +90,15 @@ public interface DetailViewEvent {
      * @return the EventType of this event.
      */
     EventType getEventType();
+
+    /**
+     * Get the EventType of this event, at the given zoomlevel.
+     *
+     * @return the EventType of this event.
+     */
+    default EventType getEventType(EventTypeZoomLevel zoomLevel) {
+        return zoomLevel.equals(SUB_TYPE) ? getEventType() : getEventType().getBaseType();
+    }
 
     /**
      * Get the start time of this event as milliseconds from the Unix Epoch.
